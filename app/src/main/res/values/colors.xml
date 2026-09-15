@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Compose 밖(창 배경·스플래시·런처 아이콘)에서 쓰는 색.
+  ⚠️ 값은 theme/Color.kt 및 iOS 의 FlameColor 와 반드시 같아야 한다 —
+     한쪽만 바꾸면 앱이 뜨는 찰나에 다른 색이 비친다.
+-->
+<resources>
+    <color name="bg_dark">#FF05080F</color>      <!-- 가장 어두운 배경 (푸른 검정) -->
+    <color name="bg_surface">#FF0B1422</color>   <!-- 카드 / 서피스 -->
+    <color name="flame_primary">#FF2E9BFF</color><!-- 메인 플레임 (핫 블루) -->
+    <color name="flame_accent">#FF22E0FF</color> <!-- 액센트 (시안 — 불꽃 심지) -->
+    <color name="text_main">#FFE8F2FF</color>    <!-- 기본 텍스트 (쿨 화이트) -->
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+</resources>
