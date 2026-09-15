@@ -27,6 +27,9 @@
 
 - [이 프로젝트는 무엇인가](#이-프로젝트는-무엇인가)
 - [주요 기능](#주요-기능)
+- [설치하기](#설치하기)
+- [처음 실행하기](#처음-실행하기)
+- [자주 겪는 문제](#자주-겪는-문제)
 - [지원 범위](#지원-범위)
 - [입력](#입력)
 - [프로젝트 구조](#프로젝트-구조)
@@ -79,6 +82,69 @@
 ### 운영
 - 💥 **크래시 복구 센터** — 새 크래시 리포트를 감지해 전체 로그를 보여주고, **원인으로 의심되는 모드를 짚어 토글로 끄게** 함
 - 🔄 **인앱 업데이트 알림** — GitHub 릴리스와 현재 버전을 비교, "이 버전 건너뛰기" 지원
+
+---
+
+## 설치하기
+
+앱스토어가 아닌 **APK 직접 설치**입니다.
+
+1. [Releases](https://github.com/FlameLaunchers/FlameLauncher-Android/releases) 에서 최신 APK 를 받습니다
+2. 설치 시 "출처를 알 수 없는 앱" 허용을 묻습니다 — 허용해주세요
+3. 설치 후 첫 실행 때 저장소 권한을 줍니다
+
+### 필요한 것
+
+| | |
+|---|---|
+| **안드로이드** | 8.0 (API 26) 이상 |
+| **CPU** | arm64-v8a — 2017년 이후 기기는 대부분 해당됩니다 |
+| **여유 공간** | 4GB 이상 (앱 + 게임 + 자바 런타임) |
+| **램** | 4GB 권장. 3GB 이하는 모드팩이 버겁습니다 |
+| **계정** | 마인크래프트 자바 에디션 **정품** |
+
+> 안드로이드는 iOS 와 달리 **JIT 설정이 필요 없습니다.** 받아서 바로 쓰면 됩니다.
+
+---
+
+## 처음 실행하기
+
+1. **로그인** — 상단 아바타 → 마이크로소프트 계정
+2. **버전 고르기** — 왼쪽 메뉴 `인스턴스 선택` → `정식` 탭
+3. **모드 로더 선택** — 바닐라 / Fabric / Forge / NeoForge
+4. **다운로드 대기** — 게임 파일과 자바 런타임 (첫 실행만, 5~15분)
+5. **실행** — `설치됨` 탭에서 고른 뒤 `▶ 실행`
+
+### 셰이더 쓰기
+
+1. 인스턴스에 **Fabric** 설치
+2. `모드팩 설치` 에서 **Iris Shaders** 설치 (의존 모드는 자동으로 같이 깔립니다)
+3. 게임 안 `설정 → 그래픽 → Shader Packs`
+4. 렌더러는 **Zink** 를 권장합니다 (`옵션 · 렌더러`)
+
+### 조작 바꾸기
+
+`키보드 편집` 에서 화면 버튼의 위치·크기를 직접 배치합니다. 물리 키보드와 게임패드도
+연결하면 바로 잡힙니다 — 게임패드는 스틱·트리거까지 매핑됩니다.
+
+---
+
+## 자주 겪는 문제
+
+**설치는 됐는데 실행하면 바로 꺼짐**
+→ arm64-v8a 기기인지 확인하세요. armeabi-v7a(32비트) 기기는 지원하지 않습니다.
+
+**게임 중 갑자기 꺼짐**
+→ 램 부족입니다. `옵션` 에서 **할당 메모리를 낮추고**(모순 같지만, 자바 힙을 줄여야
+텍스처가 쓸 자리가 생깁니다) **렌더 거리도 낮춰보세요.**
+
+**모드팩이 안 켜짐**
+→ 모드 개수가 많으면 첫 부팅이 몇 분 걸립니다. 그래도 안 되면 `옵션` 에서 렌더러를
+바꿔보세요 — Zink 와 GL4ES 는 호환성이 다릅니다.
+
+**26.3 스냅샷이 실행 안 됨**
+→ 마인크래프트가 GLFW 를 SDL3 로 바꿨습니다. 아직 대응이 안 됐고, **최신 정식(26.2)은
+정상 동작합니다.**
 
 ---
 
@@ -591,6 +657,9 @@ GPL-3.0 のコードは AGPL-3.0 の著作物に結合でき (GPLv3 第13条が�
 
 - [What this project is](#what-this-project-is)
 - [Features](#features)
+- [Installing](#installing)
+- [First run](#first-run)
+- [Troubleshooting](#troubleshooting)
 - [What is supported](#what-is-supported)
 - [Input](#input)
 - [Project layout](#project-layout)
@@ -643,6 +712,70 @@ Three bridges do the heavy lifting:
 ### Operations
 - 💥 **Crash recovery centre** — detects new crash reports, shows the full log, and **points at the mod it suspects so you can toggle it off**
 - 🔄 **In-app update notice** — compares the current build against GitHub releases, with a "skip this version" option
+
+---
+
+## Installing
+
+Not from an app store — you install the **APK** directly.
+
+1. Grab the latest APK from [Releases](https://github.com/FlameLaunchers/FlameLauncher-Android/releases)
+2. Android will ask you to allow installs from unknown sources — allow it
+3. Grant storage permission on first launch
+
+### What you need
+
+| | |
+|---|---|
+| **Android** | 8.0 (API 26) or later |
+| **CPU** | arm64-v8a — essentially any device from 2017 onward |
+| **Free space** | 4 GB (app, game and a Java runtime) |
+| **RAM** | 4 GB recommended; modpacks are a stretch below 3 GB |
+| **Account** | A **paid** Minecraft Java Edition account |
+
+> Unlike iOS, Android needs **no JIT setup**. Install and go.
+
+---
+
+## First run
+
+1. **Sign in** — avatar at the top → Microsoft account
+2. **Pick a version** — left menu → the release tab
+3. **Pick a loader** — vanilla, Fabric, Forge or NeoForge
+4. **Wait for the download** — game files and a Java runtime; first time only, 5–15 minutes
+5. **Play** — select it under the installed tab and press play
+
+### Shaders
+
+1. Install **Fabric** on the instance
+2. Install **Iris Shaders** from the modpack browser — dependencies come along automatically
+3. In game: `Options → Video Settings → Shader Packs`
+4. **Zink** is the renderer to use here
+
+### Controls
+
+The keyboard editor lets you place and resize the on-screen buttons yourself. Hardware
+keyboards and gamepads are picked up as soon as they connect — gamepads map sticks and
+triggers too.
+
+---
+
+## Troubleshooting
+
+**Installs, then closes immediately on launch**
+→ Check that the device is arm64-v8a. 32-bit (armeabi-v7a) devices are not supported.
+
+**Crashes mid-game**
+→ Out of memory. Lower the **heap allocation** in options — counter-intuitive, but a
+smaller Java heap leaves room for textures — and lower the **render distance** too.
+
+**A modpack won't start**
+→ With many mods the first boot takes several minutes. If it still fails, try a different
+renderer in options; Zink and GL4ES differ in what they tolerate.
+
+**26.3 snapshots won't run**
+→ Minecraft swapped GLFW for SDL3. Not supported yet; **the current release, 26.2, works
+fine.**
 
 ---
 
