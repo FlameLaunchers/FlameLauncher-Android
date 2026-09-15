@@ -61,18 +61,43 @@ android {
         prefab = true
     }
 
-    // ⚠️ 고정된 release keystore — 이게 없으면(즉 signingConfigs.getByName("debug") 를
-    //   그대로 쓰면) CI 러너마다 매번 새로 생성되는 임시 debug.keystore 로 서명돼서,
-    //   빌드마다 서명 인증서(SHA)가 달라진다. 안드로이드는 "이미 설치된 앱과 서명이
-    //   다른 APK"는 설치를 거부하므로(패키지 구문 분석 오류/설치 충돌), 매번 새
-    //   빌드를 설치하려면 기존 앱을 삭제해야 하는 문제가 있었다. 저장소에 커밋해둔
-    //   고정 keystore 로 항상 동일한 서명을 쓰도록 해서, 업데이트 설치가 정상 동작하게 함.
+    // ── 릴리스 서명 ──────────────────────────────────────────────────────────
+    //
+    // 빌드마다 서명이 달라지면 안 된다. 안드로이드는 "이미 설치된 앱과 서명이 다른 APK"
+    // 를 거부하므로(설치 충돌), 업데이트 설치를 하려면 항상 같은 키로 서명해야 한다.
+    //
+    // ⚠️ 그렇다고 키를 저장소에 두면 안 된다. 예전에는 keystore 를 커밋하고
+    //    비밀번호까지 여기에 평문으로 박아 뒀는데, 저장소가 공개로 바뀐 순간
+    //    그건 곧 서명 키 유출이다 — 누구나 이 앱의 '업데이트'로 설치되는 APK 에
+    //    서명할 수 있게 된다.
+    //
+    // 그래서 키는 밖에서 주입한다. 우선순위:
+    //   1. 환경변수 (CI — GitHub Actions 시크릿에서 내려온다)
+    //   2. keystore.properties (로컬 — .gitignore 에 걸려 있다)
+    // 둘 다 없으면 릴리스 서명 설정을 **아예 만들지 않는다.** 그러면 릴리스 빌드가
+    // 디버그 키로 조용히 서명되는 대신, 서명 없이 나와서 실수를 바로 알 수 있다.
+    val keystoreProps = rootProject.file("keystore.properties").takeIf { it.exists() }
+        ?.let { f -> Properties().apply { f.inputStream().use { load(it) } } }
+
+    fun secret(env: String, prop: String): String? =
+        System.getenv(env) ?: keystoreProps?.getProperty(prop)
+
+    val storePasswordValue = secret("FLAME_KEYSTORE_PASSWORD", "storePassword")
+    val keyPasswordValue   = secret("FLAME_KEY_PASSWORD", "keyPassword")
+    val keystorePath       = secret("FLAME_KEYSTORE_PATH", "storeFile")
+        ?: "keystore/flamelauncher-release.keystore"
+    val keystoreFile       = file(keystorePath)
+
+    val canSignRelease = storePasswordValue != null && keyPasswordValue != null && keystoreFile.exists()
+
     signingConfigs {
-        create("release") {
-            storeFile = file("keystore/flamelauncher-release.keystore")
-            storePassword = "flamelauncher123"
-            keyAlias = "flamelauncher"
-            keyPassword = "flamelauncher123"
+        if (canSignRelease) {
+            create("release") {
+                storeFile = keystoreFile
+                storePassword = storePasswordValue
+                keyAlias = secret("FLAME_KEY_ALIAS", "keyAlias") ?: "flamelauncher"
+                keyPassword = keyPasswordValue
+            }
         }
     }
 
@@ -83,7 +108,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = signingConfigs.getByName("release")
+            // 서명 재료가 없으면 서명 없이 나온다. 디버그 키로 조용히 서명되는 것보다
+            // 낫다 — 그건 설치는 되지만 기존 설치분과 서명이 달라 업데이트가 거부된다.
+            signingConfig = signingConfigs.findByName("release")
         }
         debug {
             // 디버그 .so 심볼 유지 (크래시 분석용)
