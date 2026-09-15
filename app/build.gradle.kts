@@ -13,9 +13,10 @@ android {
     compileSdk = 36
     ndkVersion = "27.0.12077973"   // NDK r27 LTS (CMake 3.22.1 호환)
 
-    val localProperties = Properties().apply {
-        load(rootProject.file("local.properties").inputStream())
-    }
+    // ⚠️ 여기서 local.properties 를 읽던 코드가 있었다. 지웠다 — **쓰지도 않으면서**
+    //    파일이 없으면 구성 단계에서 그대로 터졌다(CI 러너에는 그 파일이 없다).
+    //      FAILURE: … local.properties (No such file or directory)
+    //    (컴파일러도 "Variable 'localProperties' is never used" 로 경고하고 있었다)
 
     defaultConfig {
         applicationId = "kr.co.donghyun.flamelauncher"
@@ -29,10 +30,14 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        val properties = Properties().apply {
-            load(rootProject.file("local.properties").inputStream())
-        }
-        val curseforgeApiKey = properties.getProperty("CURSEFORGE_API_KEY") ?: ""
+        // ⚠️ 파일이 없어도 죽지 않아야 한다. CI 러너에는 local.properties 가 없고,
+        //    예전에는 여기서 그대로 터졌다("No such file or directory").
+        //    CI 는 시크릿을, 로컬은 local.properties 를 쓴다 — keystore 와 같은 방식이다.
+        val curseforgeApiKey = System.getenv("CURSEFORGE_API_KEY")
+            ?: rootProject.file("local.properties").takeIf { it.exists() }
+                ?.let { f -> Properties().apply { f.inputStream().use { load(it) } } }
+                ?.getProperty("CURSEFORGE_API_KEY")
+            ?: ""
 
         buildConfigField("String", "CURSEFORGE_API_KEY", "\"$curseforgeApiKey\"")
 

@@ -44,6 +44,9 @@ jobs:
           FLAME_KEYSTORE_PASSWORD: ${{ secrets.FLAME_KEYSTORE_PASSWORD }}
           FLAME_KEY_PASSWORD: ${{ secrets.FLAME_KEY_PASSWORD }}
           FLAME_KEY_ALIAS: ${{ secrets.FLAME_KEY_ALIAS }}
+          # ⚠️ 로컬은 local.properties, CI 는 이 시크릿에서 읽는다.
+          #    이 키는 APK 안에 평문으로 들어간다 — 받은 사람은 누구나 꺼낼 수 있다.
+          CURSEFORGE_API_KEY: ${{ secrets.CURSEFORGE_API_KEY }}
         run: ./gradlew :app:assembleRelease --no-daemon
 
       # ⚠️ 서명이 안 된 채로 릴리스에 올라가면 사용자는 설치조차 못 한다.
