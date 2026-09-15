@@ -17,7 +17,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Autorenew
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.UnfoldMore
@@ -49,8 +48,6 @@ import kr.co.donghyun.flamelauncher.R
 import kr.co.donghyun.flamelauncher.BuildConfig
 import kr.co.donghyun.flamelauncher.data.instance.InstanceManager
 import kr.co.donghyun.flamelauncher.data.instance.InstanceMeta
-import kr.co.donghyun.flamelauncher.data.renderer.Renderer
-import kr.co.donghyun.flamelauncher.data.renderer.RendererManager
 import kr.co.donghyun.flamelauncher.data.mojang.DownloadPhase
 import kr.co.donghyun.flamelauncher.data.mojang.DownloadProgress
 import kr.co.donghyun.flamelauncher.data.mojang.VersionEntry
@@ -237,9 +234,6 @@ fun MainScreen(
                                             selected = selectedInstance,
                                             isLoggedIn = isLoggedIn,
                                             onLaunch = { selectedInstance?.let { onLaunchInstance(it) } },
-                                            onChangeVersion = {
-                                                selectedInstance?.let { onOpenInstanceSettings(it) }
-                                            },
                                         )
                                     }
                                 }
@@ -616,22 +610,21 @@ private fun InstanceItem(
 }
 
 /**
- * 설치됨 탭의 아래 띠 — 버전 카드 · 렌더러 선택 · 실행 버튼을 **한 줄**에 담는다.
+ * 설치됨 탭의 아래 띠 — 버전 카드 · 실행 버튼을 **한 줄**에 담는다.
  *
- * ⚠️ 예전에는 세로로 쌓고 Spacer 로 늘였다. 목록 아래 띠로 들어가면서 렌더러 행이
- *    화면 밖으로 밀려 스크롤해야 보였다. 셰이더가 되는지 안 되는지가 렌더러에 달려 있어
- *    가장 자주 만지는 값인데 숨어 있으면 안 된다.
+ * ⚠️ 버전 카드는 **표시 전용**이다. 예전에는 눌러서 인스턴스 설정으로 갔는데, 목록 각
+ *    행에 이미 설정 아이콘이 있어서 같은 입구가 둘이었다. 렌더러 선택도 여기 있었지만
+ *    인스턴스 설정으로 되돌렸다 — 이 줄은 "무엇을 · 실행" 두 가지만 말한다.
  */
 @Composable
 private fun InstalledPanel(
     selected: InstanceMeta?,
     isLoggedIn: Boolean,
     onLaunch: () -> Unit,
-    onChangeVersion: () -> Unit,
 ) {
     val context = LocalContext.current
     val tablet = isTablet()
-    // 한 줄에 놓이는 카드 셋(버전 · 렌더러 · 실행)의 공통 높이.
+    // 한 줄에 놓이는 카드 셋(버전 · 실행)의 공통 높이.
     // 안쪽 여백으로 높이를 정하면 줄 수가 다른 카드끼리 몇 dp 씩 어긋난다.
     val rowHeight = if (tablet) 46.dp else 40.dp
 
@@ -653,7 +646,7 @@ private fun InstalledPanel(
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // ── 버전 변경 입구 ──
+        // ── 실행 대상 (표시 전용) ──
         Row(
             modifier = Modifier
                 .weight(1f)
@@ -661,7 +654,6 @@ private fun InstalledPanel(
                 .clip(RoundedCornerShape(10.dp))
                 .background(BgDark)
                 .border(1.dp, BgBorder, RoundedCornerShape(10.dp))
-                .clickable(onClick = onChangeVersion)
                 .padding(horizontal = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -676,20 +668,7 @@ private fun InstalledPanel(
                     maxLines = 1, overflow = TextOverflow.Ellipsis,
                 )
             }
-            // ⚠️ 글자 바로 뒤가 아니라 오른쪽 끝에 붙인다. 이름 길이에 따라 아이콘 위치가
-            //    들쭉날쭉하면 옆 카드들과 줄이 안 맞아 보인다.
-            Spacer(Modifier.width(4.dp))
-            Icon(
-                Icons.Filled.Autorenew, contentDescription = null,
-                tint = FlamePrimary, modifier = Modifier.size(14.dp),
-            )
         }
-
-        RendererCard(
-            meta = selected,
-            height = rowHeight,
-            modifier = Modifier.width(if (tablet) 190.dp else 150.dp),
-        )
 
         Button(
             onClick = onLaunch,
@@ -717,73 +696,6 @@ private fun InstanceMeta.loaderLabel(): String = when (loaderType?.lowercase()) 
     "neoforge" -> "NeoForge ${loaderVersion ?: ""}"
     "quilt"    -> "Quilt ${loaderVersion ?: ""}"
     else       -> "Vanilla"
-}
-
-/**
- * 이 인스턴스가 실제로 쓸 렌더러. 여기서 바로 바꿀 수 있어야 한다 —
- * 예전에는 인스턴스 설정 화면까지 들어가야 보였다.
- *
- * 저장은 InstanceManager 로 바로 한다. 목록을 다시 읽어 오는 경로가 없어서
- * 화면에 보이는 값은 지역 상태로 들고 있는다.
- */
-@Composable
-private fun RendererCard(meta: InstanceMeta, height: androidx.compose.ui.unit.Dp, modifier: Modifier = Modifier) {
-    val context = LocalContext.current
-    var open by remember { mutableStateOf(false) }
-    var override by remember(meta.id) { mutableStateOf(meta.rendererId) }
-    val global = remember(meta.id, override) { RendererManager.load(context) }
-    val effective = override?.let { Renderer.fromId(it) } ?: global
-
-    Box(modifier) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(height)
-                .clip(RoundedCornerShape(10.dp))
-                .background(BgDark)
-                .border(1.dp, BgBorder, RoundedCornerShape(10.dp))
-                .clickable { open = true }
-                .padding(horizontal = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(effective.emoji, fontSize = 12.sp)
-            Spacer(Modifier.width(8.dp))
-            Column(Modifier.weight(1f)) {
-                Text("렌더러", color = TextSecondary, fontSize = 10.sp)
-                Text(
-                    if (override == null) "${effective.displayName} (전역 기본)" else effective.displayName,
-                    color = TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis,
-                )
-            }
-            Spacer(Modifier.width(4.dp))
-            Icon(
-                Icons.Filled.UnfoldMore, contentDescription = null,
-                tint = TextSecondary, modifier = Modifier.size(12.dp),
-            )
-        }
-
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            DropdownMenuItem(
-                text = { Text("전역 기본 (${global.displayName})", fontSize = 13.sp) },
-                trailingIcon = { if (override == null) Icon(Icons.Filled.Check, null, tint = FlamePrimary) },
-                onClick = {
-                    open = false; override = null
-                    InstanceManager.updateRendererId(context, meta.id, null)
-                },
-            )
-            Renderer.entries.forEach { item ->
-                DropdownMenuItem(
-                    text = { Text("${item.emoji} ${item.displayName}", fontSize = 13.sp) },
-                    trailingIcon = { if (override == item.id) Icon(Icons.Filled.Check, null, tint = FlamePrimary) },
-                    onClick = {
-                        open = false; override = item.id
-                        InstanceManager.updateRendererId(context, meta.id, item.id)
-                    },
-                )
-            }
-        }
-    }
 }
 
 /**
