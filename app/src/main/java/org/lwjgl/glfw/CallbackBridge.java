@@ -32,51 +32,23 @@ public class CallbackBridge {
     public static final int EVENT_TYPE_SCROLL           = 1007;
     public static final int EVENT_TYPE_WINDOW_SIZE      = 1008;
 
-    // ─── 아래는 예전에 `public static native` 로 선언돼 있었지만 네이티브에
-    //     대응 구현(Java_org_lwjgl_glfw_CallbackBridge_nativeSendChar 등)이
-    //     아예 없어서, 호출하면 UnsatisfiedLinkError 가 나고 호출부의 try/catch 가
-    //     그걸 삼켜 "조용히 아무 일도 안 일어나는" 상태였다.
-    //     (그 결과 채팅 문자 입력 · 소프트키보드 IME 입력 · 마우스 휠이 전부 무동작)
-    //     실제로 export 되는 nativeSendData 로 라우팅해서 되살린다. 호출부는
-    //     리플렉션으로 이 이름들을 찾으므로 시그니처는 그대로 유지한다.
-    //     데이터 포맷은 input_bridge_v3.c 의 sscanf 포맷과 1:1 로 맞춰야 한다.
-
-    /** CB_EVENT_CHAR — sscanf("%d") */
-    public static boolean nativeSendChar(char codepoint) {
-        nativeSendData(true, EVENT_TYPE_CHAR, Integer.toString(codepoint));
-        return true;
-    }
-
-    /** CB_EVENT_CHAR_MODS — sscanf("%d,%d") */
-    public static boolean nativeSendCharMods(char codepoint, int mods) {
-        nativeSendData(true, EVENT_TYPE_CHAR_MODS, codepoint + "," + mods);
-        return true;
-    }
-
-    /** CB_EVENT_KEY — sscanf("%d,%d,%d,%d") */
-    public static void nativeSendKey(int key, int scancode, int action, int mods) {
-        nativeSendData(true, EVENT_TYPE_KEY, key + "," + scancode + "," + action + "," + mods);
-    }
-
-    /** CB_EVENT_CURSOR_POS — sscanf("%f,%f"). Float.toString 은 로케일과 무관하게 '.' 를 쓴다. */
-    public static void nativeSendCursorPos(float x, float y) {
-        nativeSendData(true, EVENT_TYPE_CURSOR_POS, x + "," + y);
-    }
-
-    /** CB_EVENT_MOUSE_BUTTON — sscanf("%d,%d,%d") */
-    public static void nativeSendMouseButton(int button, int action, int mods) {
-        nativeSendData(true, EVENT_TYPE_MOUSE_BUTTON, button + "," + action + "," + mods);
-    }
-
-    /** CB_EVENT_SCROLL — sscanf("%f,%f") */
-    public static void nativeSendScroll(double xoffset, double yoffset) {
-        nativeSendData(true, EVENT_TYPE_SCROLL, (float) xoffset + "," + (float) yoffset);
-    }
-
-    /** CB_EVENT_WINDOW_SIZE — 현재 네이티브는 이 타입을 수신만 하고 무시한다(no-op). */
-    public static void nativeSendScreenSize(int width, int height) {
-        nativeSendData(true, EVENT_TYPE_WINDOW_SIZE, width + "," + height);
-    }
+    // ─── input_bridge_v3.c::registerFunctions 가 RegisterNatives 로 붙이는 8개 ───
+    //
+    // ⚠️ 이 목록은 noncritical_fcns[] 와 **이름·시그니처가 정확히 같아야 한다.**
+    //    RegisterNatives 는 표의 첫 항목이 어긋나는 순간 실패하면서 NoSuchMethodError 를
+    //    JNI_OnLoad 에 남기고, 그러면 libglfw.so 를 System.load 하는 자리에서 그대로
+    //    터진다 — 즉 게임이 **모든 버전에서** 실행 즉시 튕긴다.
+    //    한때 이 메서드들을 자바 구현(nativeSendData 로 라우팅)으로 바꾼 적이 있는데,
+    //    RegisterNatives 는 native 가 아닌 메서드에도 같은 에러를 내므로 그게 원인이었다.
+    //    (게다가 CB_EVENT_WINDOW_SIZE 는 nativeSendData 가 무시해서 화면 크기 전달이 죽는다)
+    public static native void nativeSetUseInputStackQueue(boolean useInputStackQueue);
+    public static native boolean nativeSendChar(char codepoint);
+    public static native boolean nativeSendCharMods(char codepoint, int mods);
+    public static native void nativeSendKey(int key, int scancode, int action, int mods);
+    public static native void nativeSendCursorPos(float x, float y);
+    public static native void nativeSendMouseButton(int button, int action, int mods);
+    public static native void nativeSendScroll(double xoffset, double yoffset);
+    public static native void nativeSendScreenSize(int width, int height);
 
     // ─── JVM → Android 콜백 (네이티브가 이 메서드들을 호출) ───────────
 

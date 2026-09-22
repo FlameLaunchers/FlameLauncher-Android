@@ -983,10 +983,20 @@ static void registerFunctions(JNIEnv *env) {
     }else{
         LOGI("CriticalNative is not available. Upgrade, maybe?");
     }
-    (*env)->RegisterNatives(env,
+    jint rc = (*env)->RegisterNatives(env,
                             bridge_class,
                             use_critical_cc ? critical_fcns : noncritical_fcns,
                             sizeof(critical_fcns)/sizeof(critical_fcns[0]));
+    // 표와 CallbackBridge.java 가 어긋나면 NoSuchMethodError 가 걸린 채로 JNI_OnLoad 가
+    // 끝나고, System.load 자리에서 그대로 터져 게임이 실행 즉시 튕긴다. 입력이 죽는 건
+    // 고쳐야 할 버그지만, 그것 때문에 실행 자체를 막지는 않는다 — 여기서 걷어내고 남긴다.
+    if (rc != JNI_OK) {
+        LOGE("RegisterNatives(CallbackBridge) FAILED rc=%d — 입력이 동작하지 않는다 (CallbackBridge.java 의 native 선언을 표와 맞출 것)", rc);
+        if ((*env)->ExceptionCheck(env)) {
+            (*env)->ExceptionDescribe(env);
+            (*env)->ExceptionClear(env);
+        }
+    }
 }
 
 JNIEXPORT jlong JNICALL
