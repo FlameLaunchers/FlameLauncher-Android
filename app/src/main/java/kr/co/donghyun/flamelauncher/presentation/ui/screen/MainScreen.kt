@@ -19,6 +19,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Dashboard
+import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material.icons.filled.UnfoldMore
 import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.Keyboard
@@ -32,6 +34,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.addPathNodes
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -59,11 +64,28 @@ import kr.co.donghyun.flamelauncher.presentation.util.window.isTablet
 import kr.co.donghyun.flamelauncher.presentation.util.window.isCompact
 import java.net.URL
 
-enum class MainTab(val label: String) {
-    INSTALLED("설치됨"),
-    RELEASE("정식"),
-    ALL("전체"),
+/// 아이콘은 iOS 판(MainTab.icon)과 같은 모양이다:
+/// internaldrive.fill · checkmark.seal.fill · square.grid.2x2.fill
+enum class MainTab(val label: String, val icon: ImageVector) {
+    INSTALLED("설치됨", HardDriveIcon),
+    RELEASE("정식", Icons.Filled.Verified),
+    ALL("전체", Icons.Filled.GridView),
 }
+
+/// Material Symbols "hard_drive"(Apache 2.0) — iOS 의 internaldrive.fill 과 같은 모양.
+/// material-icons-extended 에는 없다(Storage 는 서버 랙 모양이라 다르다).
+private val HardDriveIcon: ImageVector =
+    ImageVector.Builder("HardDrive", 24.dp, 24.dp, 960f, 960f)
+        .addGroup(translationY = 960f)   // 원본 viewBox 가 0 -960 960 960 이다
+        .addPath(
+            addPathNodes(
+                "M680-320q25 0 42.5-17t17.5-43q0-25-17.5-42.5T680-440q-26 0-43 17.5T620-380q0 26 17 43t43 17Z" +
+                "M80-600l136-136q11-11 25.5-17.5T273-760h413q17 0 31.5 6.5T743-736l137 136H80Z" +
+                "m80 400q-34 0-57-23t-23-57v-240h800v240q0 34-23.5 57T800-200H160Z"
+            ),
+            fill = SolidColor(Color.Black),
+        )
+        .build()
 
 /// 왼쪽 메뉴 항목. iOS 판과 같은 구성이다.
 ///
@@ -111,7 +133,6 @@ fun MainScreen(
     isLoggedIn: Boolean,
     username: String?,
     onLogin: () -> Unit,
-    onCommunityLogin: () -> Unit = {},
     loginError: String? = null,
     launchingInstance: InstanceMeta? = null,
 ) {
@@ -150,7 +171,9 @@ fun MainScreen(
     // ⚠️ 하단바를 **그리는 조건과 자리를 비우는 조건이 같아야 한다.**
     //    예전에는 폰이면 무조건 56dp 를 비워 뒀는데, 설치됨 탭과 업데이트 노트에서는
     //    그 바를 그리지 않는다 — 실행 줄 아래에 빈 띠가 남아 버튼이 허공에 뜬 것처럼 보였다.
-    val showBottomBar = !tablet &&
+    // ⚠️ 태블릿도 이 바를 쓴다. 예전 태블릿 전용 SidePlayPanel 이 빠지면서 `!tablet` 만 남아,
+    //    태블릿에서는 정식·전체 탭에 Play/진행 표시가 하나도 없어 설치 자체를 못 했다.
+    val showBottomBar =
         selectedTab != MainTab.INSTALLED &&
         selectedSection != MainSection.NOTES
 
@@ -161,7 +184,6 @@ fun MainScreen(
                     isLoggedIn, username, uuid, onLogin,
                     onOpenContents, onOpenKeySettings, onOpenNetworkSettings, onOpenSettings, onOpenRendererSettings,
                     onOpenTerracotta = { showTerracotta = true },
-                    onCommunityLogin = onCommunityLogin
                 )
             } else {
                 // ⚠️ 태블릿용 배너(그라데이션+아바타+텍스트버튼 여러 줄)를 그대로 축소해서
@@ -172,7 +194,6 @@ fun MainScreen(
                     username = username,
                     uuid = uuid,
                     onLogin = onLogin,
-                    onCommunityLogin = onCommunityLogin,
                 )
             }
 
@@ -367,7 +388,7 @@ private fun SectionRow(section: MainSection, selected: Boolean, onClick: () -> U
     }
 }
 
-/// 오른쪽 본문 위의 탭. 칸이 좁으므로 아이콘 없이 이름 + 개수만 둔다.
+/// 오른쪽 본문 위의 탭 — iOS 판과 같이 아이콘 · 이름 · 개수를 세로로 쌓는다.
 @Composable
 private fun MainTabBar(
     selected: MainTab,
@@ -401,6 +422,11 @@ private fun MainTabBar(
                     .padding(vertical = 7.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
+                Icon(
+                    tab.icon, contentDescription = null,
+                    tint = if (isSelected) Color.White else TextSecondary,
+                    modifier = Modifier.padding(bottom = 2.dp).size(16.dp),
+                )
                 Text(
                     text = tab.label,
                     color = if (isSelected) Color.White else TextSecondary,
@@ -626,7 +652,8 @@ private fun InstalledPanel(
     val tablet = isTablet()
     // 한 줄에 놓이는 카드 셋(버전 · 실행)의 공통 높이.
     // 안쪽 여백으로 높이를 정하면 줄 수가 다른 카드끼리 몇 dp 씩 어긋난다.
-    val rowHeight = if (tablet) 46.dp else 40.dp
+    // 태블릿은 두 줄 글자 위아래에 숨 쉴 틈을 준다(46dp 는 너무 빽빽해 보였다).
+    val rowHeight = if (tablet) 56.dp else 40.dp
 
     if (selected == null) {
         Text(
@@ -754,7 +781,6 @@ private fun MobileTopBar(
     username: String?,
     uuid: String?,
     onLogin: () -> Unit,
-    onCommunityLogin: () -> Unit,
 ) {
     var skinFace by remember { mutableStateOf<ImageBitmap?>(null) }
     LaunchedEffect(uuid) { skinFace = loadSkinFace(uuid) }
@@ -806,11 +832,6 @@ private fun MobileTopBar(
                     Text(
                         username ?: "", color = TextSecondary, fontSize = 11.sp,
                         modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
-                    )
-                    HorizontalDivider(color = BgBorder)
-                    DropdownMenuItem(
-                        text = { Text("🔥 커뮤니티 로그인", fontSize = 13.sp) },
-                        onClick = { showProfileMenu = false; onCommunityLogin() },
                     )
                 } else {
                     DropdownMenuItem(
@@ -949,7 +970,6 @@ fun ProfileHeader(
     onOpenSettings: () -> Unit,
     onOpenRendererSettings: () -> Unit,
     onOpenTerracotta: () -> Unit = {},
-    onCommunityLogin: () -> Unit = {},
 ) {
     val context = LocalContext.current
     // ── 이하 기존 ProfileHeader 본문 그대로 ──
@@ -1029,25 +1049,6 @@ fun ProfileHeader(
             }
             // ⚠️ 추가 콘텐츠·키 설정·렌더링 설정 버튼 줄은 없앴다. 전부 왼쪽 메뉴
             //    (SectionSidebar)에 있어서 같은 곳으로 가는 입구가 두 개였다.
-            //    왼쪽 메뉴에 없는 커뮤니티 로그인만 남긴다.
-            if (isLoggedIn) {
-                Spacer(modifier = Modifier.height(if (tablet) 12.dp else if (compact) 5.dp else 6.dp))
-                Box(
-                    modifier = Modifier.clip(RoundedCornerShape(8.dp))
-                        .background(BgSurface)
-                        .border(1.dp, BgBorder, RoundedCornerShape(8.dp))
-                        .clickable { onCommunityLogin() }
-                        .padding(horizontal = if (compact) 6.dp else 7.dp, vertical = if (tablet) 6.dp else 3.dp),
-                ) {
-                    Text(
-                        "🔥 커뮤니티 로그인",
-                        color = FlameLight,
-                        fontSize = if (tablet) 11.sp else if (compact) 7.sp else 7.5.sp,
-                        fontWeight = FontWeight.Medium,
-                        maxLines = 1,
-                    )
-                }
-            }
         }
     }
 }

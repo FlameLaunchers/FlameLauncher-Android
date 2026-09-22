@@ -62,8 +62,6 @@ fun CrashReportScreen(
     suspects: List<CrashLogParser.SuspectMod>,
     onBack: () -> Unit,
     onToggleMod: (jarName: String, enable: Boolean) -> Unit,
-    onShareToCommunity: () -> Unit,
-    isSharing: Boolean,
 ) {
     val tablet = isTablet()
     val compact = isCompact()
@@ -99,16 +97,6 @@ fun CrashReportScreen(
                 modifier = Modifier.weight(1f, fill = false).padding(horizontal = 4.dp)
             )
             Row(verticalAlignment = Alignment.CenterVertically) {
-                TextButton(
-                    enabled = !isSharing,
-                    onClick = { if (logContent.isNotEmpty()) onShareToCommunity() }
-                ) {
-                    Text(
-                        if (isSharing) "공유 중…" else "🔥 공유",
-                        color = if (isSharing) TextSub else Flame,
-                        fontSize = if (tablet) 14.sp else if (compact) 10.sp else 11.sp
-                    )
-                }
                 TextButton(
                     onClick = {
                         if (logContent.isNotEmpty()) {

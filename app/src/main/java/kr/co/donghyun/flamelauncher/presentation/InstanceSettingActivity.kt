@@ -85,7 +85,6 @@ class InstanceSettingsActivity : BaseActivity() {
                         val label = viewModel.selectRenderer(id)
                         Toast.makeText(this, getString(R.string.renderer_set_to, label), Toast.LENGTH_SHORT).show()
                     },
-                    onInstallPlugin = { rid -> openPluginRelease(rid) },
                     installedMods = installedMods,
                     onDeleteMod = { fileName -> viewModel.deleteMod(fileName) },
                     refreshMods = { viewModel.refreshMods() },
@@ -95,7 +94,6 @@ class InstanceSettingsActivity : BaseActivity() {
                     onLaunchModPicker = { launchModPicker() },
                     onImportModpack = { launchModpackImporter() },
                     onExportModpack = { launchModpackExporter() },
-                    onShareToWeb = { description -> viewModel.shareToWeb(description) },
                     onDeleteInstance = { viewModel.deleteInstance() },
                     deleted = deleted,
                     finish = { finish() }
@@ -108,16 +106,6 @@ class InstanceSettingsActivity : BaseActivity() {
                     }
                 }
             }
-        }
-    }
-
-    private fun openPluginRelease(rendererId: String) {
-        val url = kr.co.donghyun.flamelauncher.data.renderer.RendererPluginManager.MOBILEGLUES_RELEASE_URL
-        try {
-            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-        } catch (e: Exception) {
-            Log.e("FLAME_LAUNCHER", "렌더러($rendererId) 안내 페이지 열기 실패: ${e.message}", e)
-            Toast.makeText(this, getString(R.string.cannot_open_browser), Toast.LENGTH_SHORT).show()
         }
     }
 

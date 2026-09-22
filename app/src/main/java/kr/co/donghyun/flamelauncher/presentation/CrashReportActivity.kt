@@ -46,13 +46,6 @@ class CrashReportActivity : BaseActivity() {
                 val logContent by viewModel.logContent.collectAsState()
                 val isLoading by viewModel.isLoading.collectAsState()
                 val suspects by viewModel.suspects.collectAsState()
-                val isSharing by viewModel.isSharing.collectAsState()
-
-                androidx.compose.runtime.LaunchedEffect(Unit) {
-                    viewModel.shareResultEvents.collect { message ->
-                        android.widget.Toast.makeText(this@CrashReportActivity, message, android.widget.Toast.LENGTH_LONG).show()
-                    }
-                }
 
                 CrashReportScreen(
                     logPath = logPath,
@@ -61,8 +54,6 @@ class CrashReportActivity : BaseActivity() {
                     suspects = suspects,
                     onBack = { finish() },
                     onToggleMod = { jarName, enable -> viewModel.toggleMod(jarName, enable) },
-                    onShareToCommunity = { viewModel.shareLogToCommunity("크래시 로그 공유") },
-                    isSharing = isSharing,
                 )
             }
         }

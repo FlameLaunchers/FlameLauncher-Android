@@ -33,7 +33,6 @@ import kotlinx.coroutines.launch
 import kr.co.donghyun.flamelauncher.data.mapper.toData
 import kr.co.donghyun.flamelauncher.data.mapper.toDomain
 import kr.co.donghyun.flamelauncher.BuildConfig
-import kr.co.donghyun.flamelauncher.data.renderer.RendererPluginManager
 import kr.co.donghyun.flamelauncher.data.setting.SettingManager
 import kr.co.donghyun.flamelauncher.data.update.GithubRelease
 import kr.co.donghyun.flamelauncher.data.update.GithubUpdateChecker
@@ -57,16 +56,11 @@ class MainActivity : BaseActivity() {
 
     private val viewModel: MainViewModel by viewModels()
 
-    private var missingPluginRendererId by mutableStateOf<String?>(null)
     private var loginErrorMessage by mutableStateOf<String?>(null)
 
     private val minecraftLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
-        if (result.resultCode == MinecraftActivity.RESULT_MOBILEGLUES_MISSING) {
-            missingPluginRendererId =
-                result.data?.getStringExtra(MinecraftActivity.EXTRA_RESULT_RENDERER_ID) ?: "mobileglues"
-        }
     }
 
     private val loginLauncher = registerForActivityResult(
@@ -121,8 +115,6 @@ class MainActivity : BaseActivity() {
                     }
                 }
 
-                var showCommunityLogin by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
-
                 // ── GitHub 릴리스 기반 업데이트 자동 감지 ──
                 // 앱 실행 시 1회 최신 릴리스를 확인해, 현재 버전보다 높고 "건너뛰기"하지 않은
                 // 버전이면 업데이트 팝업을 띄운다. (실패/네트워크 없음 → 조용히 무시)
@@ -158,30 +150,10 @@ class MainActivity : BaseActivity() {
                     isLoggedIn = session != null,
                     username = session?.username,
                     onLogin = { loginLauncher.launch(Intent(this, LoginActivity::class.java)) },
-                    onCommunityLogin = { showCommunityLogin = true },
                     onLaunchNeoForge = { v, f -> viewModel.downloadForge(v.toDomain(), f, true) },
                     launchingInstance = launchingInstance?.toData(),
                 )
 
-                if (showCommunityLogin) {
-                    kr.co.donghyun.flamelauncher.presentation.ui.screen.CommunityLoginBottomSheet(
-                        sheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true),
-                        username = session?.username,
-                        uuid = session?.uuid,
-                        onDismiss = { showCommunityLogin = false },
-                    )
-                }
-
-                missingPluginRendererId?.let { rid ->
-                    RendererPluginMissingDialog(
-                        rendererId = rid,
-                        onInstall = {
-                            openPluginRendererInstall(rid)
-                            missingPluginRendererId = null
-                        },
-                        onDismiss = { missingPluginRendererId = null },
-                    )
-                }
 
                 updateRelease?.let { release ->
                     UpdateAvailableDialog(
@@ -212,70 +184,5 @@ class MainActivity : BaseActivity() {
         viewModel.refreshLoginState()
         viewModel.refreshInstances()
     }
-
-    private fun openPluginRendererInstall(rendererId: String) {
-        val url = RendererPluginManager.MOBILEGLUES_RELEASE_URL
-        try {
-            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-        } catch (e: Exception) {
-            Log.e("FLAME_LAUNCHER", "렌더러($rendererId) 안내 페이지 열기 실패: ${e.message}", e)
-            Toast.makeText(this, getString(R.string.cannot_open_browser), Toast.LENGTH_SHORT).show()
-        }
-    }
 }
 
-/**
- * 외부 플러그인 렌더러(MobileGlues/Krypton)가 선택됐지만 플러그인 APK 가 설치돼 있지 않을 때
- * 띄우는 안내 팝업.
- */
-@androidx.compose.runtime.Composable
-private fun RendererPluginMissingDialog(
-    rendererId: String,
-    onInstall: () -> Unit,
-    onDismiss: () -> Unit,
-) {
-    val context = LocalContext.current
-    val rendererName = when (rendererId) {
-        "krypton" -> "Krypton Wrapper"
-        else      -> "MobileGlues"
-    }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Text(
-                context.getString(R.string.renderer_not_installed, rendererName),
-                color = Color.White,
-                fontWeight = FontWeight.Bold,
-                fontSize = 18.sp,
-            )
-        },
-        text = {
-            Column(Modifier.fillMaxWidth()) {
-                Text(
-                    context.getString(R.string.instance_configured_with_renderer_note, rendererName) +
-                            context.getString(R.string.renderer_app_not_installed, rendererName),
-                    color = Color(0xFFCCCCCC),
-                    fontSize = 13.sp,
-                )
-                Spacer(Modifier.height(10.dp))
-                Text(
-                    context.getString(R.string.renderer_install_retry, rendererName) +
-                            context.getString(R.string.or_change_renderer_in_instance_settings),
-                    color = Color(0xFFAAAAAA),
-                    fontSize = 12.sp,
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onInstall) {
-                Text(context.getString(R.string.go_install), color = Color(0xFFFF7A3D), fontWeight = FontWeight.Bold)
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(context.getString(R.string.close_button), color = Color(0xFFAAAAAA))
-            }
-        },
-        containerColor = Color(0xFF1E1E1E),
-    )
-}

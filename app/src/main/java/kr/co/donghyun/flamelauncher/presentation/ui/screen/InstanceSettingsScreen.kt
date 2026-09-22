@@ -26,15 +26,12 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -57,7 +54,6 @@ import androidx.compose.ui.window.Dialog
 import kr.co.donghyun.flamelauncher.data.jvm.JvmSettings
 import kr.co.donghyun.flamelauncher.domain.model.InstalledMod
 import kr.co.donghyun.flamelauncher.data.renderer.Renderer
-import kr.co.donghyun.flamelauncher.data.renderer.RendererPluginManager
 import kr.co.donghyun.flamelauncher.presentation.ui.theme.BgBorder
 import kr.co.donghyun.flamelauncher.presentation.ui.theme.BgDark
 import kr.co.donghyun.flamelauncher.presentation.ui.theme.BgSurface
@@ -86,7 +82,6 @@ import kotlin.math.roundToInt
  * @param currentRendererId 이 인스턴스에 저장된 렌더러 id. null 이면 전역 기본을 따른다.
  * @param onRendererSelected 렌더러를 고르면 호출(저장은 Activity 가 InstanceManager 로 처리).
  *                           null 을 넘기면 "전역 기본 사용"으로 되돌린다.
- * @param onInstallPlugin 외부 플러그인 렌더러(MobileGlues 등) 미설치 상태에서 설치 안내를
  *                        눌렀을 때. 렌더러 id 를 넘겨 Activity 가 해당 릴리스 페이지를 연다.
  *
  * @param installedMods   이 인스턴스 mods/ 에 들어있는 모드 목록(활성 .jar + 비활성 .jar.disabled).
@@ -102,7 +97,6 @@ fun InstanceSettingsScreen(
     loaderLabel : String?,
     currentRendererId : String?,
     onRendererSelected : (rendererId : String?) -> Unit,
-    onInstallPlugin : (rendererId : String) -> Unit,
     installedMods : List<InstalledMod>,
     onDeleteMod : (fileName : String) -> Unit,
     refreshMods : () -> Unit,
@@ -112,7 +106,6 @@ fun InstanceSettingsScreen(
     onLaunchModPicker: () -> Unit,
     onImportModpack: () -> Unit,
     onExportModpack: () -> Unit,
-    onShareToWeb: (String) -> Unit,
     onDeleteInstance: () -> Unit,
     deleted: Boolean,
     finish : () -> Unit
@@ -121,7 +114,6 @@ fun InstanceSettingsScreen(
     var showRendererPicker by remember { mutableStateOf(false) }
     var showCustomDriverManager by remember { mutableStateOf(false) }
     var showModManager by remember { mutableStateOf(false) }
-    var showShareSheet by remember { mutableStateOf(false) }
     val tablet = isTablet()
     val compact = isCompact()
 
@@ -165,13 +157,10 @@ fun InstanceSettingsScreen(
                 Spacer(Modifier.height(8.dp))
 
                 // 렌더러 — 인스턴스별 설정. 탭하면 선택 다이얼로그.
-                val mgAvailable = RendererPluginManager.isMobileGluesAvailable()
                 val localContext = LocalContext.current
                 val rendererLabel = rendererDisplayLabel(currentRendererId, localContext)
                 val rendererSub = when {
                     currentRendererId == null -> "전역 기본값 사용 · 탭하여 이 인스턴스 전용으로 변경"
-                    currentRendererId == "mobileglues" && !mgAvailable ->
-                        "MobileGlues 미설치 — 실행 시 Zink로 폴백됩니다"
                     else -> "이 인스턴스 전용 렌더러"
                 }
                 SettingRow(
@@ -248,16 +237,6 @@ fun InstanceSettingsScreen(
                     enabled = !isImporting,
                 ) { onExportModpack() }
 
-                Spacer(Modifier.height(10.dp))
-
-                // FlameShares(웹)에 공유 — Minecraft 계정 닉네임/아바타로 작성자 등록,
-                //   추출된 모드팩을 안드로이드 공유 시트로 넘겨 사용자가 직접 업로드 완성.
-                SettingRow(
-                    emoji = "🔥",
-                    title = "FlameShares에 공유",
-                    subtitle = "모드팩을 커뮤니티 웹사이트에 공유합니다 (50MB 이하, Minecraft 계정으로 작성자 등록)",
-                    enabled = !isImporting,
-                ) { showShareSheet = true }
 
                 Spacer(Modifier.height(20.dp))
 
@@ -306,10 +285,6 @@ fun InstanceSettingsScreen(
                 onSelect = { id ->
                     showRendererPicker = false
                     onRendererSelected(id)
-                },
-                onInstallPlugin = { rid ->
-                    showRendererPicker = false
-                    onInstallPlugin(rid)
                 },
                 onManageCustomDriver = {
                     showRendererPicker = false
@@ -360,64 +335,6 @@ fun InstanceSettingsScreen(
             )
         }
 
-        // FlameShares 공유 전 — 간단한 소개글을 적을 수 있는 바텀시트.
-        //   ⚠️ 여기서 입력 안 해도(빈 값) 업로드는 그대로 진행된다 — 설명은 선택사항.
-        if (showShareSheet) {
-            var description by remember { mutableStateOf("") }
-            val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-            ModalBottomSheet(
-                onDismissRequest = { showShareSheet = false },
-                sheetState = sheetState,
-                containerColor = BgSurface,
-            ) {
-                Column(modifier = Modifier.fillMaxWidth().padding(20.dp).padding(bottom = 24.dp)) {
-                    Text("🔥 FlameShares에 공유", color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        "다른 사람들이 이 모드팩을 이해하는 데 도움이 될 짧은 소개를 적어주세요 (선택).",
-                        color = TextSecondary, fontSize = 13.sp
-                    )
-                    Spacer(Modifier.height(16.dp))
-                    OutlinedTextField(
-                        value = description,
-                        onValueChange = { if (it.length <= 300) description = it },
-                        placeholder = { Text("예: 탐험과 마법에 초점을 맞춘 모드팩입니다") },
-                        modifier = Modifier.fillMaxWidth(),
-                        minLines = 3,
-                        maxLines = 6,
-                        colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = Flame,
-                            unfocusedBorderColor = Flame.copy(alpha = 0.5f),
-                            focusedTextColor = TextPrimary,
-                            unfocusedTextColor = TextPrimary,
-                            cursorColor = Flame,
-                        ),
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        "⚠️ FlameShares는 커뮤니티가 자율적으로 운영하는 공간으로, FlameLauncher 의 " +
-                            "공식 지원 라이브러리가 아닙니다. 업로드된 파일에 포함된 바이러스·악성코드 등에 " +
-                            "대해 책임지지 않으니, 다운로드한 모드팩은 사용 전 사용자 본인의 판단으로 확인해 주세요.",
-                        color = TextSecondary, fontSize = 11.sp, lineHeight = 15.sp
-                    )
-                    Spacer(Modifier.height(20.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End
-                    ) {
-                        TextButton(onClick = { showShareSheet = false }) {
-                            Text("취소", color = TextSecondary)
-                        }
-                        TextButton(onClick = {
-                            showShareSheet = false
-                            onShareToWeb(description)
-                        }) {
-                            Text("업로드", color = Flame, fontWeight = FontWeight.Bold)
-                        }
-                    }
-                }
-            }
-        }
     }
 }
 
@@ -621,7 +538,6 @@ private fun RendererPickerDialog(
     currentRendererId: String?,
     onDismiss: () -> Unit,
     onSelect: (rendererId: String?) -> Unit,
-    onInstallPlugin: (rendererId: String) -> Unit,
     onManageCustomDriver: () -> Unit = {},
 ) {
     val context = LocalContext.current
@@ -648,8 +564,7 @@ private fun RendererPickerDialog(
                 )
                 Spacer(Modifier.height(8.dp))
 
-                // 내부 렌더러: Zink, GL4ES
-                Renderer.entries.filter { !it.isPlugin }.forEach { r ->
+                Renderer.entries.forEach { r ->
                     RendererOption(
                         emoji = r.emoji,
                         title = r.displayName,
@@ -667,26 +582,6 @@ private fun RendererPickerDialog(
                     Spacer(Modifier.height(8.dp))
                 }
 
-                // 외부 플러그인 렌더러: MobileGlues / Krypton (설치된 것만 활성)
-                Renderer.entries.filter { it.isPlugin }.forEachIndexed { idx, r ->
-                    if (idx > 0) Spacer(Modifier.height(8.dp))
-                    val available = RendererPluginManager.pluginFor(r.id) != null
-                    RendererOption(
-                        emoji = r.emoji,
-                        title = r.displayName + if (!available) context.getString(R.string.not_installed_suffix) else "",
-                        desc = if (available) r.description
-                        else context.getString(R.string.separate_app_required_to_use, r.displayName),
-                        selected = currentRendererId == r.id,
-                        enabled = available,
-                        onClick = { if (available) onSelect(r.id) },
-                    )
-                    if (!available) {
-                        Spacer(Modifier.height(6.dp))
-                        TextButton(onClick = { onInstallPlugin(r.id) }) {
-                            Text(context.getString(R.string.open_install_guide_for, r.displayName), color = FlamePrimary, fontSize = 12.sp)
-                        }
-                    }
-                }
             }
         },
         confirmButton = {},
