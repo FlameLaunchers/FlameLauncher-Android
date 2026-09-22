@@ -42,7 +42,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kr.co.donghyun.flamelauncher.data.renderer.Renderer
-import kr.co.donghyun.flamelauncher.data.renderer.RendererPluginManager
 import kr.co.donghyun.flamelauncher.domain.model.JvmSettings
 import kr.co.donghyun.flamelauncher.presentation.ui.theme.BgBorder
 import kr.co.donghyun.flamelauncher.presentation.ui.theme.BgDark
@@ -159,8 +158,6 @@ fun SettingsScreen(
 
                 Spacer(Modifier.height(2.dp))
 
-                val mgAvailable = RendererPluginManager.isMobileGluesAvailable()
-                // Zink/GL4ES 는 항상, MobileGlues 는 설치됐을 때만 후보.
                 Renderer.selectableRenderers().forEach { r ->
                     GlobalRendererOption(
                         emoji = r.emoji,
@@ -169,14 +166,6 @@ fun SettingsScreen(
                         selected = globalRenderer.id == r.id,
                         tablet = tablet,
                         onClick = { onGlobalRendererChange(r) },
-                    )
-                }
-
-                if (!mgAvailable) {
-                    Text(
-                        context.getString(R.string.mobileglues_install_note),
-                        color = TextSub,
-                        fontSize = if (tablet) 11.sp else 9.sp
                     )
                 }
             }

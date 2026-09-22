@@ -28,6 +28,13 @@ here that is Terracotta's AGPL-3.0.
                                                   processors, GLFW 3.4 stubs)
     EasyTier                      LGPL-3.0       inside Terracotta
     LWJGL (Pojav-patched)         BSD-3-Clause   lwjgl3/
+    LWJGL 3.4.3 (self-built)      BSD-3-Clause   assets/lwjgl341/ (26.3)
+    MobileGlues                   LGPL-2.1       libmobileglues.so,
+                                                 libmobileglues_info_getter.so
+                                                 (unmodified, dynamically loaded;
+                                                  source: github.com/MobileGL-Dev)
+    SDL3 (patched)                Zlib           libSDL3.so (26.3)
+    shaderc / glslang / SPIRV     Apache-2.0     assets/lwjgl341/libshaderc.so
     OpenJDK (Temurin)             GPL-2.0 + CE   bundled JRE
 
 GPL-3.0 code may be combined into an AGPL-3.0 work -- GPLv3 section 13 permits

@@ -8,11 +8,14 @@ import android.content.pm.PackageManager
 import android.hardware.input.InputManager.InputDeviceListener
 import android.net.Uri
 import android.os.Build
+import android.os.Bundle
 import android.util.Log
 import android.view.InputDevice
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.Surface
+import android.view.WindowManager
+import android.view.SurfaceHolder
 import android.view.SurfaceView
 import android.view.View
 import android.widget.Toast
@@ -38,6 +41,7 @@ import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kr.co.donghyun.flamelauncher.BuildConfig
 import kr.co.donghyun.flamelauncher.data.auth.MicrosoftAuthManager
 import kr.co.donghyun.flamelauncher.data.instance.InstanceManager
 import kr.co.donghyun.flamelauncher.data.instance.InstanceType
@@ -46,10 +50,11 @@ import kr.co.donghyun.flamelauncher.data.jvm.JvmSettingsManager
 import kr.co.donghyun.flamelauncher.data.jvm.isLegacyVersion
 import kr.co.donghyun.flamelauncher.data.renderer.Renderer
 import kr.co.donghyun.flamelauncher.data.renderer.RendererManager
-import kr.co.donghyun.flamelauncher.data.renderer.RendererPluginManager
 import kr.co.donghyun.flamelauncher.presentation.input.GamepadHandler
 import kr.co.donghyun.flamelauncher.presentation.input.GlfwKeys
-import kr.co.donghyun.flamelauncher.presentation.base.BaseActivity
+import kr.co.donghyun.flamelauncher.presentation.input.glfwToSdlScancode
+import kr.co.donghyun.flamelauncher.presentation.util.usesSdl
+import kr.co.donghyun.flamelauncher.presentation.util.needsLwjgl34
 import kr.co.donghyun.flamelauncher.presentation.ui.components.GameControllerView
 import kr.co.donghyun.flamelauncher.presentation.ui.components.InGameMenuOverlay
 import kr.co.donghyun.flamelauncher.presentation.ui.components.DisabledModsOverlay
@@ -81,7 +86,78 @@ import java.util.zip.ZipOutputStream
 
 
 @dagger.hilt.android.AndroidEntryPoint
-class MinecraftActivity : BaseActivity() {
+class MinecraftActivity : org.libsdl.app.SDLActivity() {
+
+    // ── 26.3+ (SDL3) 경로 ────────────────────────────────────────────────────
+    //
+    // 26.3 부터 마인크래프트는 GLFW 를 버리고 SDL3 로 간다. SDL3 의 안드로이드 백엔드는
+    // 창·입력의 자바 쪽을 [org.libsdl.app.SDLActivity] 로 받으므로, 이 액티비티가 그
+    // 클래스를 **상속**한다. 그 전 버전에서는 [usesSDL] 이 false 라 SDL 이 초기화되지
+    // 않고(업스트림 onCreate 가 통째로 비켜간다) 기존 PojavLauncher 스택 그대로 돈다.
+    //
+    // ⚠️ BaseActivity 를 상속하지 못하게 됐다(자바는 단일 상속). 그쪽이 하던 일은
+    //    가로 고정·창 플래그·onCreated() 호출 셋뿐이라 아래 onCreate 로 옮겼다.
+    private val sdlMode: Boolean by lazy {
+        usesSdl(intent.getStringExtra(EXTRA_VERSION_ID) ?: "")
+    }
+
+    override fun usesSDL(): Boolean = sdlMode
+
+    /** SDL 모드에서 C main 스레드는 띄우지 않는다 — main 은 마인크래프트를 돌리는 JVM 이다. */
+    override fun startsSDLMainThread(): Boolean = false
+
+    /** SDL 의 JNI_OnLoad 가 **달빅 VM** 을 잡게 여기서 올린다. JVM 의 LWJGL 은 같은 걸 재사용한다. */
+    override fun getLibraries(): Array<String> = arrayOf("SDL3")
+
+    /**
+     * SDL 이 게임 화면(SurfaceView)을 만들 때 우리 터치 처리를 심는다.
+     *
+     * ⚠️ 만든 뒤에 setOnTouchListener 로 붙이면 안 된다. SDLSurface.handleResume() 이
+     *    재개될 때마다 `setOnTouchListener(this)` 로 자기 리스너를 다시 등록해서, 붙여 둔
+     *    드래그(시점 회전) 처리가 덮어써졌다(실측: 인게임 드래그가 안 먹음).
+     *    onTouch 자체를 재정의하면 SDL 이 다시 등록해도 결국 여기로 온다.
+     */
+    override fun createSDLSurface(context: Context): org.libsdl.app.SDLSurface =
+        object : org.libsdl.app.SDLSurface(context) {
+            private val flameTouch =
+                kr.co.donghyun.flamelauncher.presentation.ui.components.minecraftTouchListener(
+                    this@MinecraftActivity
+                ) { intArrayOf(width, height) }
+
+            override fun onTouch(v: View, event: MotionEvent): Boolean = flameTouch.onTouch(v, event)
+        }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        // super 보다 먼저 고정한다 — 뒤에 하면 SDL 이 만든 창이 한 번 세로로 잡혔다 돈다.
+        requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+        super.onCreate(savedInstanceState)
+        if (sdlMode) {
+            // SDL3 는 SDLActivity.loadLibraries 가 이미 올렸다. 입력 주입 쪽만 더 올린다.
+            runCatching {
+                System.loadLibrary("flamesdl")
+                // 게임이 SDL_Init 을 부르기 전에 알려야 한다 — 늦으면 SDL 이 초기화를 거절한다.
+                Log.i("FLAME_LAUNCHER", "SDL_SetMainReady: ${nativeSdlSetMainReady()}")
+            }.onFailure { Log.e("FLAME_LAUNCHER", "libflamesdl.so 준비 실패", it) }
+        }
+        applyWindowFlags()
+        onCreated()
+    }
+
+    private var hideNavigation = false
+
+    private fun hideNavigation() {
+        hideNavigation = true
+        applyWindowFlags()
+    }
+
+    private fun applyWindowFlags() {
+        window.addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        val controller = WindowCompat.getInsetsController(window, window.decorView)
+        if (hideNavigation) controller.hide(WindowInsetsCompat.Type.navigationBars())
+        controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+    }
+
 
     // ⚠️ 이 클래스의 external fun 들은 JNI 네이티브 코드에 클래스 이름이 하드코딩되어 있어서
     //   (Java_kr_co_donghyun_flamelauncher_presentation_MinecraftActivity_...) 절대 다른
@@ -95,6 +171,19 @@ class MinecraftActivity : BaseActivity() {
     private external fun nativeDumpInputState()
 
     private external fun nativeSendKey(key: Int, scancode: Int, action: Int, mods: Int)
+
+    // ── 26.3+ (SDL3) 입력 주입 — libflamesdl.so ──────────────────────────────
+    // 화면 버튼·게임패드는 SDL 의 SurfaceView 밖에서 오므로 이벤트를 직접 넣는다.
+    // (SurfaceView 자체의 터치는 SDL 이 알아서 받는다)
+    private external fun nativeSdlSendKey(scancode: Int, action: Int): Boolean
+    private external fun nativeSdlSendChar(codepoint: Int): Boolean
+    private external fun nativeSdlSendMouseButton(glfwButton: Int, action: Int): Boolean
+    private external fun nativeSdlSendCursorPos(mode: Int, x: Float, y: Float): Boolean
+    private external fun nativeSdlSendScroll(dx: Float, dy: Float): Boolean
+    private external fun nativeSdlSetFramebufferSize(w: Int, h: Int)
+    private external fun nativeSdlIsGrabbing(): Int
+    private external fun nativeSdlSetMainReady(): Boolean
+    private external fun nativeMgSwapCount(): Int
 
     private external fun nativeSendMouseButton(button: Int, action: Int, mods: Int)
     private external fun nativeSendCursorPos(x: Float, y: Float)
@@ -129,6 +218,8 @@ class MinecraftActivity : BaseActivity() {
     internal val isGrabbing: Boolean
         get() {
             if (!jvmStarted) return false
+            // 26.3 은 grab 을 SDL_SetWindowRelativeMouseMode 로 건다. 창이 아직 없으면 -1.
+            if (sdlMode) return try { nativeSdlIsGrabbing() == 1 } catch (_: Throwable) { false }
             return try { nativeIsGrabbing() } catch (_: Throwable) { false }
         }
 
@@ -167,12 +258,6 @@ class MinecraftActivity : BaseActivity() {
         private const val EXTRA_GAME_DIR = "game_dir"
         private const val EXTRA_INSTANCE_DIR = "instance_dir"
 
-        /**
-         * MobileGlues 렌더러가 선택됐는데 플러그인 APK 가 설치돼 있지 않을 때,
-         * MinecraftActivity 는 게임을 띄우지 않고 이 결과 코드로 종료한다.
-         * MainActivity 는 Activity Result 로 이 값을 받아 설치 안내 팝업을 띄운다.
-         */
-        const val RESULT_MOBILEGLUES_MISSING = 1001
 
         /** 안내 팝업에서 쓸, 사용자가 고른 렌더러 표시명(선택). */
         const val EXTRA_RESULT_RENDERER_ID = "result_renderer_id"
@@ -303,7 +388,7 @@ class MinecraftActivity : BaseActivity() {
         }
     }
 
-    override fun onCreated() {
+    private fun onCreated() {
         hideNavigation()
         currentInstance = this
         requestMicPermissionIfNeeded()
@@ -315,26 +400,7 @@ class MinecraftActivity : BaseActivity() {
         instanceDir = intent.getStringExtra(EXTRA_INSTANCE_DIR)
         Log.d("FLAME_LAUNCHER", "instanceDir 수신: $instanceDir")  // ← 추가
 
-        // 외부 렌더러 플러그인(MobileGlues) 설치 여부 스캔 — 인스턴스 렌더러 해석/실행 전에 1회.
-        RendererPluginManager.refresh(this)
-
-        // ── MobileGlues 선택됐는데 플러그인 APK 미설치 → 게임을 띄우지 않고 종료, MainActivity 가 안내 ──
-        //   인스턴스별 렌더러(또는 전역 기본)가 mobileglues 인지 확인. 미설치면 setResult 후 finish.
-        run {
-            val selectedRendererId = instanceDir
-                ?.let { runCatching { InstanceManager.loadMeta(File(it))?.rendererId }.getOrNull() }
-                ?: RendererManager.load(this).id
-            if (selectedRendererId == "mobileglues" && !RendererPluginManager.isMobileGluesAvailable()) {
-                Log.w("FLAME_LAUNCHER",
-                    getString(R.string.mobileglues_plugin_missing_note))
-                setResult(
-                    RESULT_MOBILEGLUES_MISSING,
-                    Intent().putExtra(EXTRA_RESULT_RENDERER_ID, "mobileglues")
-                )
-                finish()
-                return
-            }
-        }
+        // MobileGlues 는 앱에 내장돼 있다(jniLibs). 설치 여부를 확인할 것도, 안내할 것도 없다.
         customGameDir = intent.getStringExtra(EXTRA_GAME_DIR)
         Log.d("FLAME_LAUNCHER", "customGameDir 수신: $customGameDir")  // ← 추가
 
@@ -370,10 +436,14 @@ class MinecraftActivity : BaseActivity() {
             override fun handleOnBackPressed() { return }
         })
 
-        setContent {
+        // ⚠️ 26.3+(SDL) 에서는 **SDL 이 만든 화면을 건드리지 않는다** — iOS 와 같은 구조다.
+        //    SDL 의 SurfaceView 를 떼어 Compose 로 옮겼더니 SDL 자바 쪽의 표면 통지가
+        //    꼬여서, 게임은 창을 만들었는데 한 프레임도 안 나왔다(실측). SDL 레이아웃은
+        //    SDLActivity.onCreate 가 이미 setContentView 해 두었으니, 그 위에 오버레이만 얹는다.
+        val gameContent: @androidx.compose.runtime.Composable () -> Unit = {
             FlameLauncherTheme {
                 Box(modifier = Modifier.fillMaxSize()) {
-                    MinecraftSurface(
+                    if (!sdlMode) MinecraftSurface(
                         onSurfaceCreated = { surface, _ ->
                             currentSurface = surface
                             applyRenderResolutionScale()   // 렌더 해상도 배율(축소 시 FPS↑)
@@ -429,6 +499,17 @@ class MinecraftActivity : BaseActivity() {
                 }
             }
         }
+        if (sdlMode) {
+            addContentView(
+                androidx.compose.ui.platform.ComposeView(this).apply { setContent { gameContent() } },
+                android.view.ViewGroup.LayoutParams(
+                    android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                    android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                ),
+            )
+        } else {
+            setContent { gameContent() }
+        }
 
 
         // GameControllerView 는 부팅 오버레이가 닫힌 뒤(첫 프레임 이후) 추가한다.
@@ -438,7 +519,162 @@ class MinecraftActivity : BaseActivity() {
         setupInputDeviceWatching()
         installPhysicalKeyboardInterceptor()
 
+        if (sdlMode) {
+            launchWhenSdlSurfaceReady()
+            watchSdlWindowForBootOverlay()
+        }
+
         setupBootOverlay()
+    }
+
+    /**
+     * SDL 모드에서 부팅 오버레이를 닫는 신호.
+     *
+     * ⚠️ 기존 신호(egl_bridge.c 의 첫 swap → onFirstFrameRendered)는 PojavLauncher 스택에서
+     *    오는 것이라 26.3 경로에는 오지 않는다. 대신 SDL 창이 생겼는지를 본다 — 창이 서면
+     *    게임이 그리기 시작한 것이다.
+     */
+    private fun watchSdlWindowForBootOverlay() {
+        // 첫 프레임이 화면에 나가면 닫는다. 신호는 MobileGlues 의 스왑 수다.
+        // ⚠️ UI 스레드에서 SDL 을 조회하지 않는다 — 게임이 SDL 락을 쥐고 창을 만드는 순간
+        //    그 조회가 걸려 메인 스레드가 통째로 멈췄다(실측). 백그라운드에서 센 값만 본다.
+        lifecycleScope.launch(Dispatchers.Default) {
+            repeat(1200) {   // 최대 5분
+                if (bootOverlayDismissed) return@launch
+                if (runCatching { nativeMgSwapCount() }.getOrDefault(0) > 0) {
+                    withContext(Dispatchers.Main) { dismissBootOverlay("first-frame") }
+                    return@launch
+                }
+                kotlinx.coroutines.delay(250)
+            }
+            withContext(Dispatchers.Main) { dismissBootOverlay("timeout") }
+        }
+    }
+
+    /**
+     * SDL 모드의 JVM 시작 시점 — SDL 이 만든 Surface 가 크기까지 확정된 다음이다.
+     *
+     * ⚠️ surfaceCreated 가 아니라 surfaceChanged 를 기다린다. SDL 의 안드로이드 백엔드는
+     *    창 크기를 자바 쪽 surfaceChanged 로 받으므로, 그 전에 SDL_CreateWindow 가 불리면
+     *    0x0 짜리 창이 잡힌다.
+     */
+    private fun launchWhenSdlSurfaceReady() {
+        val surfaceView = mSurface as SurfaceView
+        // 기존 코드가 게임 화면을 이 태그로 찾는다(소프트키보드 포커스·해상도 배율 등).
+        surfaceView.tag = "minecraft_surface"
+        // ⚠️ SDL 자기 콜백만 믿으면 안 된다. 이 뷰는 SDL 레이아웃에서 떼어 Compose 트리로
+        //    옮겨지는데, 그 과정에서 SDL 쪽 surfaceCreated/Changed 가 오지 않는 경우가 있다
+        //    (실측: destroyed 만 찍히고 created 가 없었다). 그러면 SDL 창 크기가 0 으로 남아
+        //    게임이 한 프레임도 내놓지 않는다. 우리가 받은 것을 그대로 넘겨 준다.
+        surfaceView.holder.addCallback(object : SurfaceHolder.Callback {
+            override fun surfaceCreated(holder: SurfaceHolder) = Unit
+            override fun surfaceChanged(holder: SurfaceHolder, format: Int, w: Int, h: Int) {
+                currentSurface = holder.surface
+                if (jvmStarted) return
+                jvmStarted = true
+                Log.d("FLAME_LAUNCHER", "🪟 SDL surface 준비됨 (${w}x$h) — JVM 시작")
+                setupAndLaunch(holder.surface)
+            }
+            override fun surfaceDestroyed(holder: SurfaceHolder) {
+                currentSurface = null
+            }
+        })
+    }
+
+    /**
+     * 26.3 용 LWJGL 3.4.3 네이티브를 앱 전용 폴더로 꺼내고 그 경로를 돌려준다.
+     *
+     * ⚠️ jniLibs 에 둘 수 없다. 이름이 기존 3.3.3 판(liblwjgl.so 등)과 똑같아서 한 폴더에
+     *    공존하지 못한다. 그래서 assets 에 넣고 버전별 폴더로 꺼낸 뒤 org.lwjgl.librarypath
+     *    맨 앞에 둔다.
+     */
+    /**
+     * 26.3 GL 백엔드가 쓸 GL 라이브러리(MobileGlues)의 절대경로. 없으면 null.
+     *
+     * ⚠️ 절대경로여야 한다 — LWJGL 과 SDL 이 **같은 파일**을 열어야 주소 비교를 통과한다.
+     */
+    private fun sdlGlLibPath(): String? {
+        // 앱에 넣은 것을 먼저 쓴다 — 버전을 우리가 고정할 수 있다(26.3 은 최신판이 필요하다).
+        val bundled = File(applicationInfo.nativeLibraryDir, "libmobileglues.so")
+        return if (bundled.exists()) bundled.absolutePath else null
+    }
+
+    /**
+     * 26.3 용 MobileGlues 설정. **매 실행 덮어쓴다.**
+     *
+     * ⚠️ `enableNoError` 를 Level2(=3) 로 둬야 한다. 26.3 의 렌더 엔진은 셰이더/프로그램을
+     *    무더기로 만들어 보면서 실패를 감수하는데, MobileGlues 가 그 오류를 그대로 올리면
+     *    "Failed to load required shader programs" 로 부팅이 끊긴다(업스트림도 26.3 부터는
+     *    이 옵션을 켜라고 안내한다).
+     * ⚠️ customGLVersion=46 은 실험값이다. 기본(4.0)에서는 마인크래프트가 만든 셰이더를
+     *    MobileGlues 가 다시 쓰다가 깨뜨린다(_uniform 미선언 등). 높은 버전으로 보고하면
+     *    다시 쓰는 양이 줄어드는지 보려는 것이다.
+     */
+    /**
+     * MobileGlues 설정·로그 폴더. **외부 저장소**에 둔다 — 릴리스 빌드는 run-as 가 막혀서
+     * 내부 cacheDir 의 latest.log 를 꺼내 볼 수 없다(26.3 셰이더 문제를 쫓다 겪었다).
+     */
+    private fun mobileGluesDir(): File =
+        File(getExternalFilesDir(null) ?: cacheDir, "MobileGlues").apply { mkdirs() }
+
+    /** MobileGlues 가 열리기 전에 설정 폴더를 알려준다. */
+    private fun applyMobileGluesDirEnv() {
+        runCatching { JavaNativeLauncher().nativeSetEnv("MG_DIR_PATH", mobileGluesDir().absolutePath) }
+            .onFailure { Log.w("FLAME_LAUNCHER", "MG_DIR_PATH 설정 실패: ${it.message}") }
+    }
+
+    /**
+     * MobileGlues 설정을 **실행할 때마다** 이 버전에 맞게 다시 쓴다(열리는 순간 읽는다).
+     *
+     * ⚠️ 폴더가 하나라서, 26.3 설정을 한 번 쓰면 다른 버전에도 그대로 남았다. 실측(1.21.1
+     *    코블버스): Iris 셰이더팩이 Mali 에서 컴파일에 실패했는데(noperspective 미지원) 오류
+     *    숨김(enableNoError 3) 때문에 Iris 가 실패를 모르고 깨진 프로그램으로 그려서 월드
+     *    텍스처가 하나도 안 나왔다. 셰이더팩 전체를 헛컴파일하느라 부팅·입장도 1분씩 늘었다.
+     *    오류를 알려주면(1) Iris 가 첫 실패에서 셰이더를 끄고 바닐라로 그린다.
+     */
+    private fun writeMobileGluesConfig() {
+        // 26.3 은 이 값(오류 숨김 · GL 4.6)으로 부팅·렌더링을 확인했다.
+        val (noError, glVersion) = if (sdlMode) 3 to 46 else 1 to 0
+        File(mobileGluesDir(), "config.json").writeText(
+            """
+            {
+              "enableANGLE": 0,
+              "enableNoError": $noError,
+              "enableExtTimerQuery": 0,
+              "enableExtComputeShader": 1,
+              "enableExtDirectStateAccess": 0,
+              "maxGlslCacheSize": 256,
+              "multidrawMode": 0,
+              "angleDepthClearFixMode": 0,
+              "customGLVersion": $glVersion,
+              "fsr1Setting": 0
+            }
+            """.trimIndent()
+        )
+    }
+
+    private fun prepareLwjgl34Natives(): File {
+        val outDir = File(filesDir, "lwjgl341")
+        outDir.mkdirs()
+        val assetDir = "lwjgl341/arm64-v8a"
+        // ⚠️ 기준은 **설치 시각**이다. 버전코드로 했더니 개발 중 재설치에서 그대로 스킵돼,
+        //    새로 넣은 liblwjgl_opengl.so 가 안 풀리고 옛 3.3.3 판이 먼저 잡혔다(실측).
+        //    (assets 는 압축돼 있을 수 있어 크기 비교는 못 믿는다)
+        val stamp = File(outDir, ".stamp")
+        val want = runCatching {
+            packageManager.getPackageInfo(packageName, 0).lastUpdateTime.toString()
+        }.getOrDefault(BuildConfig.VERSION_CODE.toString())
+        if (runCatching { stamp.readText() }.getOrNull() == want) return outDir
+
+        assets.list(assetDir)?.forEach { name ->
+            val out = File(outDir, name)
+            assets.open("$assetDir/$name").use { input ->
+                out.outputStream().use { input.copyTo(it) }
+            }
+            Log.d("FLAME_LAUNCHER", "📦 LWJGL 3.4.3 네이티브 추출: $name (${out.length()} B)")
+        }
+        stamp.writeText(want)
+        return outDir
     }
 
     /** Terracotta 등에서 쓸 현재 플레이어 이름. 저장된 세션이 없으면 null(→ 익명). */
@@ -746,6 +982,12 @@ class MinecraftActivity : BaseActivity() {
      * grab 이 아니면 메뉴 커서를 화면 안에서 움직이는 용도로 쓴다.
      */
     internal fun moveLookBy(dx: Float, dy: Float) {
+        // 26.3 은 grab 중에 절대 좌표를 보지 않는다 — MouseHandler.onMove 가 xrel/yrel 만 쓴다.
+        // 커서를 워프시키면 시점이 튀므로 상대 델타로 넣는다.
+        if (sdlMode && isGrabbing) {
+            sendCursorDelta(dx * MOUSE_SENSITIVITY, dy * MOUSE_SENSITIVITY)
+            return
+        }
         currentCursorX += dx * MOUSE_SENSITIVITY
         currentCursorY += dy * MOUSE_SENSITIVITY
         if (!isGrabbing) {
@@ -777,20 +1019,38 @@ class MinecraftActivity : BaseActivity() {
 
         var renderer = resolveRendererForVersion()
 
-        when (renderer.id) {
+        // ⚠️ 26.3 은 Vulkan 을 먼저 시도하고, 기기가 못 받으면 **GL 백엔드로 폴백**한다.
+        //    (Mali-G57 실측: Vulkan 1.2·dynamicRendering·synchronization2 미지원 → Vulkan 탈락)
+        //    그 GL 백엔드는 "LWJGL 이 연 GL 라이브러리"와 "SDL 이 연 GL 라이브러리"가 같은
+        //    파일이어야 통과한다(GlBackend.loadLibrary 가 glGetError 주소를 비교한다).
+        //    그래서 EGL 진입점까지 직접 내보내는 MobileGlues 만 쓸 수 있다 — GL4ES 계열은
+        //    egl* 를 안 내보내서 SDL 이 그 파일로 컨텍스트를 만들지 못한다.
+        if (sdlMode) {
+            writeMobileGluesConfig()
+            // ⚠️ **로드보다 먼저** 심어야 한다. MobileGlues 는 열리는 순간 설정을 읽는데,
+            //    그때 MG_DIR_PATH 가 없으면 기본값(/sdcard/MG)의 남의 앱 설정을 집어간다
+            //    — 실측: enableNoError=0 인 옛 config 를 읽어 우리 설정이 통째로 무시됐다.
+            applyMobileGluesDirEnv()
+            val mgPath = sdlGlLibPath()
+            if (mgPath != null) {
+                // info_getter 가 libmobileglues.so 의 의존성이다 — 먼저 올린다.
+                runCatching { System.load(File(File(mgPath).parent, "libmobileglues_info_getter.so").absolutePath) }
+                    .onFailure { Log.d("FLAME_LAUNCHER", "info_getter 로드 스킵: ${it.message}") }
+                runCatching { System.load(mgPath) }
+                    .onSuccess { Log.d("FLAME_LAUNCHER", "✅ 26.3 GL 백엔드용 MobileGlues 로드: $mgPath") }
+                    .onFailure { Log.w("FLAME_LAUNCHER", "⚠️ MobileGlues 로드 실패: ${it.message}") }
+            } else {
+                Log.w("FLAME_LAUNCHER", "⚠️ MobileGlues 를 찾지 못했다 — Vulkan 이 안 되는 기기면 화면이 안 뜬다")
+            }
+        }
+        else when (renderer.id) {
             "mobileglues" -> {
-                // MobileGlues 의 .so 는 런처가 아니라 외부 플러그인 APK 의 nativeLibraryDir 에 있다.
-                // 절대경로로 직접 로드한다(info_getter 가 libmobileglues.so 의 의존성이므로 먼저).
-                val mg = RendererPluginManager.mobileGlues
-                if (mg != null) {
-                    val dir = mg.nativeLibraryDir
-                    runCatching { System.load("$dir/libmobileglues_info_getter.so") }
-                        .onFailure { Log.d("FLAME_LAUNCHER", "info_getter 로드 스킵: ${it.message}") }
-                    runCatching { System.load(mg.glLibAbsolutePath) }
-                        .onSuccess { Log.d("FLAME_LAUNCHER", "✅ 렌더러: MobileGlues (${mg.glLibAbsolutePath})") }
-                        .onFailure { Log.w("FLAME_LAUNCHER", "⚠️ libmobileglues.so 로드 실패: ${it.message}") }
-                } else {
-                    Log.w("FLAME_LAUNCHER", "⚠️ MobileGlues 플러그인 미감지 — env 폴백에 의존")
+                writeMobileGluesConfig()
+                applyMobileGluesDirEnv()
+                // info_getter 가 libmobileglues.so 의 의존성이라 먼저 올린다.
+                loadSoSafely(File(applicationInfo.nativeLibraryDir, "libmobileglues_info_getter.so"), required = false)
+                if (loadSoSafely(File(applicationInfo.nativeLibraryDir, "libmobileglues.so"), required = true)) {
+                    Log.d("FLAME_LAUNCHER", "✅ 렌더러: MobileGlues")
                 }
             }
             "zink" -> {
@@ -816,10 +1076,16 @@ class MinecraftActivity : BaseActivity() {
 
         // 공통 .so — 하나가 실패해도 다음 것은 계속 시도
         loadSoSafely(File(nativesDir, "libopenal.so"), required = false)
-        loadSoSafely(File(nativesDir, "libglfw.so"), required = true)
-        loadSoSafely(File(nativesDir, "libpojavexec.so"), required = true)
-        loadSoSafely(File(nativesDir, "liblwjgl.so"), required = false)
-        loadSoSafely(File(nativesDir, "liblwjgl_opengl.so"), required = false)
+        if (!sdlMode) {
+            // ⚠️ GLFW 스택은 26.3 미만 전용이다. libglfw.so / libpojavexec.so 는 자기들이
+            //    창과 입력을 소유한다고 가정하므로(pojavInit 라우팅) SDL 경로에서 같이 올리면
+            //    같은 화면을 두 주인이 다투게 된다. liblwjgl.so 도 3.3.3 판이라 3.4.3 jar 와
+            //    섞이면 클래스 초기화에서 죽는다.
+            loadSoSafely(File(nativesDir, "libglfw.so"), required = true)
+            loadSoSafely(File(nativesDir, "libpojavexec.so"), required = true)
+            loadSoSafely(File(nativesDir, "liblwjgl.so"), required = false)
+            loadSoSafely(File(nativesDir, "liblwjgl_opengl.so"), required = false)
+        }
 
         DnsHookNative.setup(this)
 
@@ -832,11 +1098,14 @@ class MinecraftActivity : BaseActivity() {
             Log.w("FLAME_LAUNCHER", "⚠️ preloadAwtStubs 예외 (무시 가능): ${e.message}")
         }
 
-        try {
-            nativeSetupBridgeWindow(surface)
-            Log.d("FLAME_LAUNCHER", "✅ setupBridgeWindow 완료")
-        } catch (e: Exception) {
-            Log.e("FLAME_LAUNCHER", "setupBridgeWindow 실패: ${e.message}", e)
+        // SDL 모드에서는 창을 SDL 이 갖는다 — 브릿지 창(GLFW 대역)을 만들면 안 된다.
+        if (!sdlMode) {
+            try {
+                nativeSetupBridgeWindow(surface)
+                Log.d("FLAME_LAUNCHER", "✅ setupBridgeWindow 완료")
+            } catch (e: Exception) {
+                Log.e("FLAME_LAUNCHER", "setupBridgeWindow 실패: ${e.message}", e)
+            }
         }
 
         startCrashWatcher()
@@ -901,6 +1170,7 @@ class MinecraftActivity : BaseActivity() {
     }
 
     private fun sendScreenSize(width: Int, height: Int) {
+        if (sdlMode) { nativeSdlSetFramebufferSize(width, height); return }
         try {
             Class.forName("org.lwjgl.glfw.CallbackBridge")
                 .getMethod("nativeSendScreenSize", Int::class.java, Int::class.java)
@@ -928,7 +1198,12 @@ class MinecraftActivity : BaseActivity() {
      * 렌더 해상도 배율 적용. SurfaceView 버퍼를 줄이면 GPU 가 더 적은 픽셀을 그려 FPS 가 오르고,
      * SurfaceView 가 화면 크기로 다시 늘려서 보여준다. (ZalithLauncher2 의 Resolution 과 동일 방식)
      * 버퍼가 작아지면 onSurfaceChanged 로 축소된 크기가 전달되어 sendScreenSize 도 자동으로 맞춰진다.
-     * 100% 면 네이티브 그대로라 손대지 않는다. (서피스당 1회만 적용)
+     * 100% 면 네이티브 그대로라 손대지 않는다.
+     *
+     * ⚠️ 버퍼 크기는 **뷰 크기를 따라가게** 한다. 예전에는 표면이 처음 생길 때의 화면 크기
+     *    (displayMetrics)로 한 번만 정했는데, 자동 회전이 꺼진 세로 기본 태블릿에서는 표면이
+     *    세로로 먼저 생긴 뒤 가로로 돈다 — 버퍼가 세로 모양(660x1002)으로 굳은 채 가로 화면
+     *    (1920x1200)에 늘어나 게임 화면이 위아래로 찌그러졌다(실측, 1.21.1 · 배율 55%).
      */
     private fun applyRenderResolutionScale() {
         if (renderScaleApplied) return
@@ -939,13 +1214,19 @@ class MinecraftActivity : BaseActivity() {
             Log.w("FLAME_LAUNCHER", "⚠️ 해상도 배율: SurfaceView(minecraft_surface) 를 못 찾음 — 스킵")
             return
         }
-        val dm = resources.displayMetrics
-        val (w, h) = JvmSettings(resolutionScalePercent = renderScalePercent)
-            .scaledResolution(dm.widthPixels, dm.heightPixels)
-        sv.holder.setFixedSize(w, h)
+        val settings = JvmSettings(resolutionScalePercent = renderScalePercent)
+        fun fitTo(viewW: Int, viewH: Int) {
+            if (viewW <= 0 || viewH <= 0) return
+            val (w, h) = settings.scaledResolution(viewW, viewH)
+            sv.holder.setFixedSize(w, h)   // → surfaceChanged → sendScreenSize 로 게임도 따라온다
+            Log.i("FLAME_LAUNCHER",
+                getString(R.string.render_resolution_debug_log, renderScalePercent, w, h, viewW, viewH))
+        }
+        fitTo(sv.width, sv.height)
+        sv.addOnLayoutChangeListener { _, l, t, r, b, oldL, oldT, oldR, oldB ->
+            if (r - l != oldR - oldL || b - t != oldB - oldT) fitTo(r - l, b - t)
+        }
         renderScaleApplied = true
-        Log.d("FLAME_LAUNCHER",
-            getString(R.string.render_resolution_debug_log, renderScalePercent, w, h, dm.widthPixels, dm.heightPixels))
     }
 
     internal var currentCursorX = 1280f  // 화면 중앙 근처
@@ -1061,12 +1342,19 @@ class MinecraftActivity : BaseActivity() {
      */
     internal fun sendMouseButton(button: Int, action: Int) {
         Log.d("FLAME_LAUNCHER", "sendMouseButton: btn=$button action=$action")
+        if (sdlMode) { nativeSdlSendMouseButton(button, action); return }
         nativeSendMouseButton(button, action, 0)
     }
 
     internal fun sendCursorPos(x: Float, y: Float) {
         Log.d("FLAME_LAUNCHER", "sendCursorPos: x=$x y=$y")
+        if (sdlMode) { nativeSdlSendCursorPos(0, x, y); return }
         nativeSendCursorPos(x, y)
+    }
+
+    /** 시점 회전용 상대 이동. grab 중에는 26.3 이 xrel/yrel 만 읽는다. */
+    private fun sendCursorDelta(dx: Float, dy: Float) {
+        nativeSdlSendCursorPos(1, dx, dy)
     }
 
     internal fun sendKey(glfwKeyCode: Int, action: Int) {
@@ -1075,7 +1363,8 @@ class MinecraftActivity : BaseActivity() {
 
         val scancode = getScancode(glfwKeyCode)
 
-        nativeSendKey(glfwKeyCode, scancode, action, 0)
+        if (sdlMode) nativeSdlSendKey(glfwToSdlScancode(glfwKeyCode), action)
+        else nativeSendKey(glfwKeyCode, scancode, action, 0)
 
         // 채팅/명령어 키 → 소프트 키보드 자동 표시 (T=84, /=47).
         //   엔터(257)/ESC(256) → 채팅 닫힘이므로 키보드 숨김.
@@ -1585,6 +1874,7 @@ class MinecraftActivity : BaseActivity() {
         freetypeLibPath: String? = null,
         jnaBootPath: String? = null,
         jnaTmpDir: String? = null,
+        sdlLibraryPath: String? = null,
     ): Array<String> {
         val out = ArrayList<String>(args.size)
         var i = 0
@@ -1600,6 +1890,17 @@ class MinecraftActivity : BaseActivity() {
             // (JNA 는 이 경로에서 libjnidispatch.so 를 직접 로드 → 추출 실패로 인한
             //  "Could not initialize class com.sun.jna.NativeLibrary" 방지)
             if (jnaBootPath != null && a.startsWith("-Djna.boot.library.path")) {
+                i++
+                continue
+            }
+            // ⚠️ 26.3 의 version.json 은 네이티브 경로를 자기 것으로 못박는다
+            //    (-Djava.library.path=<natives>/java, SharedLibraryExtractPath 등).
+            //    그 폴더는 비어 있다 — 우리는 natives jar 을 안 푼다. 데스크톱용이라 쓸 수도 없다.
+            //    전부 걷어내고 아래에서 우리 경로를 단 하나만 다시 넣는다.
+            if (sdlLibraryPath != null &&
+                (a.startsWith("-Djava.library.path") ||
+                 a.startsWith("-Dorg.lwjgl.librarypath") ||
+                 a.startsWith("-Dorg.lwjgl.system.SharedLibraryExtractPath"))) {
                 i++
                 continue
             }
@@ -1630,6 +1931,10 @@ class MinecraftActivity : BaseActivity() {
                 i++
             }
         }
+        if (sdlLibraryPath != null) {
+            out.add("-Djava.library.path=$sdlLibraryPath")
+            out.add("-Dorg.lwjgl.librarypath=$sdlLibraryPath")
+        }
         // 제거 후 우리가 계산한 freetype 경로를 단 하나만 추가
         if (freetypeLibPath != null) {
             out.add("-Dorg.lwjgl.freetype.libname=$freetypeLibPath")
@@ -1652,6 +1957,9 @@ class MinecraftActivity : BaseActivity() {
      */
     private fun isRedundantLwjglJar(file: File): Boolean {
         val n = file.name
+        // ⚠️ 26.3+ 는 바닐라 LWJGL 3.4.3 자체가 진짜 스택이다. 여기서 걸러내면 게임이
+        //    org.lwjgl.sdl.* 를 못 찾는다. 네이티브 jar 만 계속 뺀다(안드로이드용이 아니다).
+        if (sdlMode) return n.contains("natives", ignoreCase = true) && n.startsWith("lwjgl", ignoreCase = true)
         // patched fat jar (e.g. "lwjgl-glfw-classes-3.3.1.jar") 는 무조건 keep
         if (n.startsWith("lwjgl-glfw-classes", ignoreCase = true)) return false
         // 네이티브 jar 는 어차피 안드로이드에서 못 씀 → 빼는 게 안전
@@ -1727,13 +2035,16 @@ class MinecraftActivity : BaseActivity() {
         //               → srg 게임 jar 를 classpath 에 넣어야 함(빼면 BOOTSTRAP 로더가 못 찾고 죽음).
         val isNeoForge = instanceMeta?.loaderType == "neoforge"
                 || mainClass.contains("net.neoforged", ignoreCase = true)
-        // PojavLauncher 패치 LWJGL은 모든 MC 버전에 필요 (libglfw.so가 pojavInit 라우팅을 가정함)
-        copyLwjglJars(base)
+        // PojavLauncher 패치 LWJGL은 26.3 **미만**에 필요 (libglfw.so 가 pojavInit 라우팅을 가정함).
+        // 26.3+ 는 GLFW 를 아예 쓰지 않으므로 이 fat jar 를 넣으면 3.4.3 클래스와 겹쳐 깨진다.
         copyMicBridgeJar(base)
-        bytecodePatchRepo.patchLwjglGlfwIfNeeded(File(base, "lwjgl3"))
+        if (!sdlMode) {
+            copyLwjglJars(base)
+            bytecodePatchRepo.patchLwjglGlfwIfNeeded(File(base, "lwjgl3"))
+        }
         val lwjgl3Dir = File(base, "lwjgl3")
         // 수정 — patched GLFW를 무조건 0번 인덱스에
-        val lwjglJars = lwjgl3Dir.listFiles()
+        val lwjglJars = if (sdlMode) mutableListOf() else lwjgl3Dir.listFiles()
             ?.filter { it.extension == "jar" }
             ?.toMutableList() ?: mutableListOf()
 
@@ -2216,7 +2527,10 @@ class MinecraftActivity : BaseActivity() {
 
 
         val glLibName = when (renderer.id) {
-            "mobileglues" -> RendererPluginManager.mobileGlues?.glLibAbsolutePath ?: "libmobileglues.so"
+            // ⚠️ 절대경로로 준다. 이름만 주면 LWJGL 이 librarypath 를 뒤져 files/natives/ 의
+            //    옛 복사본을 열고, SDL 은 APK 안의 것을 연다 — 26.3 은 두 라이브러리의
+            //    glGetError 주소를 비교하므로 그 순간 "glGetError mismatch" 로 거절한다.
+            "mobileglues" -> File(applicationInfo.nativeLibraryDir, "libmobileglues.so").absolutePath
             "krypton"     -> "libng_gl4es.so"   // 내부 번들 (jniLibs)
             "gl4es", "gl4es_desktop" -> "libgl4es_114.so"
             "zink" -> "libOSMesa.so"
@@ -2338,14 +2652,48 @@ class MinecraftActivity : BaseActivity() {
             Log.w("FLAME_LAUNCHER", "⚠️ libfreetype.so 가 nativeLibraryDir 에 없음 — 폰트 로딩 실패 가능")
         }
 
+        // ── 26.3+ (SDL3 · LWJGL 3.4.3) 전용 인자 ──────────────────────────────
+        //
+        // ⚠️ 라이브러리 이름은 **절대경로**로 준다. 26.3 의 NativeLibrariesBootstrap 이
+        //    추출 경로를 `<extract>/<LWJGL 버전>/<아키텍처>` 로 바꿔치기해서 우리 폴더를
+        //    더 이상 보지 않기 때문이다(iOS 에서 실측). LWJGL 의 loadNative 는 이름이
+        //    절대경로면 가장 먼저 그걸 그대로 연다.
+        val lwjgl34Dir = if (sdlMode) prepareLwjgl34Natives().absolutePath else null
+        val sdlStackArgs: Array<String> = if (!sdlMode) emptyArray() else {
+            val libDir = applicationInfo.nativeLibraryDir
+            arrayOf(
+                // ⚠️ 할당자를 시스템 것으로 못박는다. classpath 에 lwjgl-jemalloc jar 이 있으면
+                //    LWJGL 이 그걸 고르는데, 안드로이드용 libjemalloc.so 는 없다. 그러면
+                //    MemoryUtil 초기화가 죽고 STB·Vulkan 로딩까지 연쇄로 무너진다(실측 크래시).
+                "-Dorg.lwjgl.system.allocator=system",
+                // ⚠️ 절대경로로 준다. 이름으로 주면 JVM 쪽 로더가 이미 열린 것을 재사용하는데,
+                //    그 인스턴스는 게임이 기대하는 초기화 상태가 아니어서 SDL_Init 이 거절한다
+                //    (실측: "did you include SDL_main.h ..."). 게임은 자기 인스턴스를 연다.
+                "-Dorg.lwjgl.sdl.libname=$libDir/libSDL3.so",
+                // ⚠️ shaderc 는 26.3 전용 판을 쓴다. 앱에 번들된 것은 PojavLauncher 판이라
+                //    LWJGL 3.4.3 이 요구하는 shaderc_compile_options_set_max_id_bound 가 없고,
+                //    진입점이 하나만 없어도 클래스 초기화가 통째로 실패한다(기기 실측).
+                "-Dorg.lwjgl.shaderc.libname=$lwjgl34Dir/libshaderc.so",
+                "-Dorg.lwjgl.spvc.libname=$libDir/libspirv-cross.so",
+                "-Dorg.lwjgl.openal.libname=$libDir/libopenal.so",
+                // 안드로이드는 Vulkan 이 시스템 라이브러리다 — 이름만 주면 로더가 찾는다.
+                "-Dorg.lwjgl.vulkan.libname=libvulkan.so",
+            )
+        }
+        // 3.4.3 네이티브를 **앞에** 둔다. 뒤쪽 natives/ 에는 3.3.3 판 liblwjgl.so 가 있어서
+        // 순서가 뒤집히면 jar 와 버전이 어긋난 쪽이 먼저 잡힌다.
+        val effectiveLibraryPath = lwjgl34Dir?.let { "$it${File.pathSeparator}${nativesDir.absolutePath}" }
+            ?: nativesDir.absolutePath
+
         val jvmArgs = jvm8CompatArgs +
                 jniDebugArgs +
+                sdlStackArgs +
                 jvmSettings.toJvmArgArray(
                     context = this,
                     mcDir = mcDir,
                     userDir = mcDir.absolutePath,
                     classPath = classPathStr,
-                    libraryPath = nativesDir.absolutePath,
+                    libraryPath = effectiveLibraryPath,
                     mainClass = mainClass,
                     versionId = versionId,
                     // resolveRendererForVersion() 으로 이미 해석한 렌더러를 그대로 넘겨
@@ -2469,11 +2817,14 @@ class MinecraftActivity : BaseActivity() {
                 }
 
                 val launcher = JavaNativeLauncher()
-                val rendererEnv = renderer.buildEnv(
+                // ⚠️ 26.3(SDL) 에서는 **MobileGlues 기준**으로 env 를 만든다.
+                //    인스턴스 렌더러가 GL4ES/Zink 로 잡혀 있으면 MG_DIR_PATH·config.json 이
+                //    안 만들어지고, 설정 없이 뜬 MobileGlues 는 GL 버전을 낮게 보고한다
+                //    (마인크래프트는 GL 3.3 이상을 요구한다).
+                val envRenderer = if (sdlMode) Renderer.MOBILEGLUES else renderer
+                val rendererEnv = envRenderer.buildEnv(
                     cacheDir = applicationContext.cacheDir.absolutePath,
                     nativeDir = applicationInfo.nativeLibraryDir,
-                    // MobileGlues 면 감지된 플러그인 .so 경로를 넘긴다(내부 렌더러는 null).
-                    plugin = if (renderer.id == "mobileglues") RendererPluginManager.mobileGlues else null,
                     // GL4ES 로 안전하게 구동 가능한 버전(1.13 미만)이면 Zink 실패 시
                     // Freedreno/Panfrost 를 건너뛰고 곧바로 GL4ES 로 폴백시킨다.
                     preferGl4esOnZinkFallback = isPre113Version(versionId),
@@ -2481,6 +2832,13 @@ class MinecraftActivity : BaseActivity() {
                     customVulkanDriver = kr.co.donghyun.flamelauncher.data.renderer.CustomVulkanDriverManager
                         .getActiveDriverPathAndName(applicationContext),
                 ).toMutableMap().apply {
+                    if (sdlMode) {
+                        // SDL 은 GL 라이브러리를 이 힌트(환경변수)로 고른다. 26.3 의 GL 백엔드가
+                        // LWJGL 쪽 주소와 비교하므로 **같은 파일**을 가리켜야 한다.
+                        sdlGlLibPath()?.let { this["SDL_OPENGL_LIBRARY"] = it }
+                    }
+                    // 설정·로그를 읽을 수 있는 자리로 통일한다(buildEnv 가 넣은 내부 경로를 덮어쓴다).
+                    this["MG_DIR_PATH"] = mobileGluesDir().absolutePath
                     if (jvmSettings.unlockFps) {
                         this["FORCE_VSYNC"]       = "false"
                         this["POJAV_VSYNC"]       = "0"
@@ -2489,7 +2847,8 @@ class MinecraftActivity : BaseActivity() {
                     }
                 }
 
-                Log.d("FLAME_LAUNCHER", "🎨 적용된 렌더러: ${renderer.displayName}")
+                Log.d("FLAME_LAUNCHER", "🎨 적용된 렌더러: ${envRenderer.displayName}" +
+                        if (sdlMode) " (26.3 GL 백엔드 — 인스턴스 설정 ${renderer.displayName} 대신)" else "")
                 rendererEnv.forEach { (k, v) -> Log.d("FLAME_LAUNCHER", "  env $k=$v") }
                 launcher.applyEnv(rendererEnv)
 
@@ -2510,6 +2869,7 @@ class MinecraftActivity : BaseActivity() {
                     freetypeLibPath = if (freetypeSo.exists()) freetypeSo.absolutePath else null,
                     jnaBootPath = jnaBootPath,
                     jnaTmpDir = cacheDir.absolutePath,
+                    sdlLibraryPath = if (sdlMode) effectiveLibraryPath else null,
                 )
 
                 Log.d("FLAME_LAUNCHER", "정규화 후 JVM 인자 ${normalizedJvmArgs.size}개")
@@ -2534,6 +2894,20 @@ class MinecraftActivity : BaseActivity() {
                 val hasCrash = files
                     ?.any { it.extension == "txt" &&
                             System.currentTimeMillis() - it.lastModified() < 60_000 } == true
+                if (!hasCrash) {
+                    // ⚠️ 26.x 는 종료할 때 System.exit 을 부르지 않고 main 을 그냥 반환한다
+                    //    (26.2 도 26.3 과 똑같이 종료 시 멈췄다 — 실측).
+                    //    그 뒤 아무것도 안 하면 마지막 화면이 멈춘 채로 남고, 몇 초 뒤
+                    //    마인크래프트의 종료 감시기가 "shutdown hang" 으로 강제로 끊는다(실측).
+                    //    main 이 돌아왔다는 건 게임이 끝났다는 뜻이다 — 바로 닫는다.
+                    //    (_exit 는 안드로이드가 강제 종료로 보고 팝업을 띄운다. System.exit 는
+                    //     ART 의 정상 종료 경로라 그렇지 않다. 이 프로세스는 게임 전용이다.)
+                    Log.i("FLAME_LAUNCHER", "🏁 main 반환 — 게임 종료")
+                    runOnUiThread {
+                        finishAndRemoveTask()
+                        android.os.Handler(mainLooper).postDelayed({ System.exit(0) }, 300)
+                    }
+                }
                 if (hasCrash) {
                     runOnUiThread {
                         finish()
@@ -2696,6 +3070,7 @@ class MinecraftActivity : BaseActivity() {
      * (런처 빌드마다 JNI 이름이 다를 수 있어 reflection 으로 안전 호출)
      */
     private fun sendMouseScroll(xOffset: Float, yOffset: Float) {
+        if (sdlMode) { nativeSdlSendScroll(xOffset, yOffset); return }
         try {
             val cb = Class.forName("org.lwjgl.glfw.CallbackBridge")
             // 흔한 시그니처: nativeSendScroll(double, double)
@@ -2856,6 +3231,7 @@ class MinecraftActivity : BaseActivity() {
 
     private fun sendCharToMc(c: Char, mods: Int = 0) {
         Log.d("FLAME_LAUNCHER", "📝 sendCharToMc: '$c' (0x${c.code.toString(16)}) mods=$mods")
+        if (sdlMode) { nativeSdlSendChar(c.code); return }
         try {
             val cb = Class.forName("org.lwjgl.glfw.CallbackBridge")
 
@@ -2973,13 +3349,6 @@ class MinecraftActivity : BaseActivity() {
         var base = instanceRendererId?.let { Renderer.fromId(it) } ?: RendererManager.load(this)
         Log.d("FLAME_LAUNCHER",
             "렌더러 해석: instance=${instanceRendererId ?: "-"}, 결정=${base.id}")
-
-        // 2) MobileGlues 선택했는데 플러그인 미설치면 폴백.
-        if (base.id == "mobileglues" && !RendererPluginManager.isMobileGluesAvailable()) {
-            Log.w("FLAME_LAUNCHER",
-                "⚠️ MobileGlues 선택됐지만 플러그인 APK 미설치 → 폴백")
-            base = Renderer.ZINK
-        }
 
         // 3) pre-1.13 레거시는 Zink(OSMesa)로 못 돌리므로 GL4ES 로 강제.
         //    단, Krypton(NG-GL4ES) 도 GL4ES 포크라 구버전(1.16.5- 포함)을 자체 지원하므로 그대로 둔다.

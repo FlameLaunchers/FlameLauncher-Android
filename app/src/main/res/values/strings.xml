@@ -87,7 +87,6 @@
     <string name="terracotta_tutorial_note_title">참고:</string>
 
     <!-- ── 다국어 지원 확장(영어/중국어) 대상 문자열 ── -->
-    <string name="not_installed_suffix"> (미설치)</string>
     <string name="skipped_count_suffix"> · %1$s개 건너뜀</string>
     <string name="modpack_version_pick_desc_auto">%1$s · 원하는 모드팩 버전을 고르세요. 각 버전의 타겟 마인크래프트 버전과 모드로더가 다를 수 있습니다.</string>
     <string name="modpack_version_pick_desc_deps">%1$s · 원하는 모드팩 버전을 고르세요. 의존성은 설치 시 자동으로 채워집니다.</string>
@@ -99,7 +98,6 @@
     <string name="install_target_select_for_type">%1$s 설치 대상 선택</string>
     <string name="count_suffix">%1$s개</string>
     <string name="file_count_suffix">%1$s개 파일</string>
-    <string name="open_install_guide_for">%1$s 설치 안내 열기 ›</string>
     <string name="version_unsupported_label">%1$s · 미지원</string>
     <string name="retry_hint_one_by_one">(원인이 아닐 수도 있으니 하나씩 시도해 보세요)</string>
     <string name="override_per_instance_hint">(인스턴스 설정에서 개별로 덮어쓸 수 있어요)</string>
@@ -137,14 +135,12 @@
     <string name="more_files_suffix">… 외 %1$s개</string>
     <string name="disabled_mods_not_deleted_note">※ 비활성화된 모드는 삭제되지 않았어요. 파일명이 .jar.pingdisabled 로 바뀐 것뿐이라, </string>
     <string name="online_lan_open_to_lan_note">※ 온라인 LAN 은 먼저 게임에서 월드를 열고 \'랜에 공개(Open to LAN)\'를 켠 상태여야 동작합니다.</string>
-    <string name="mobileglues_install_note">ℹ️ MobileGlues 외부 앱을 설치하면 목록에 추가됩니다.</string>
     <string name="how_it_works_label">ℹ️ 동작 방식</string>
     <string name="extra_jvm_args_label">⌨️ 추가 JVM 인수</string>
     <string name="launch_button">▶ 실행</string>
     <string name="open_button">▶ 열기</string>
     <string name="rendering_settings_label">⚙️ 렌더링 설정</string>
     <string name="unsupported_short">⚠ 미지원</string>
-    <string name="mobileglues_plugin_missing_note">⚠️ MobileGlues 선택됐으나 플러그인 APK 미설치 → 게임 실행 중단, MainActivity 안내</string>
     <string name="possibly_problematic_mods">⚠️ 문제 가능성이 있는 모드</string>
     <string name="load_failed_label">⚠️ 불러오기 실패</string>
     <string name="disabled_mods_label">⚠️ 비활성화된 모드</string>
@@ -225,7 +221,6 @@
     <string name="fetching_version_info">버전 정보 가져오는 중...</string>
     <string name="download_from_version_tab_hint">버전 탭에서 다운로드하거나, 추가 컨텐츠에서 모드팩을 설치하세요</string>
     <string name="select_version_prompt">버전을 선택하세요</string>
-    <string name="separate_app_required_to_use">별도 앱(%1$s)을 설치해야 사용할 수 있습니다.</string>
     <string name="copy_button">복사</string>
     <string name="copied_done">복사했어요</string>
     <string name="loading_ellipsis">불러오는 중...</string>

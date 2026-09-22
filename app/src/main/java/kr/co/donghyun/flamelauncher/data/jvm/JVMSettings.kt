@@ -118,7 +118,6 @@ data class JvmSettings(
             "-Djava.library.path=$libraryPath",
             // ⚠️ org.lwjgl.opengl.libname / opengles.libname 는 여기서 emit 하지 않는다.
             //    MinecraftActivity.startMinecraft 의 rendererLibArgs 가 단일 소스로 emit하며
-            //    (MobileGlues 는 RendererPluginManager 로 .so 절대경로까지 해석한다),
             //    여기서 중복 emit 하면 JVM 이 "먼저 정의된 값"을 채택해 충돌한다.
             //    실제로 과거엔 여기 libOSMesa.so 가 앞쪽([25])에 박혀 MobileGlues 절대경로
             //    override([69])를 이겨버려, LWJGL 이 OSMesa 를 로드하고 GL 함수 포인터를

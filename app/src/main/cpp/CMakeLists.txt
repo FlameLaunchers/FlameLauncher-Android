@@ -25,6 +25,12 @@ target_include_directories(flamejvm PRIVATE
 )
 target_link_libraries(flamejvm ${log-lib} vulkan)
 
+# ── flamesdl (26.3 · SDL3 입력 주입) ───────────────────────────
+# 화면 버튼·게임패드를 SDL 이벤트로 넣는다. dlopen/dlsym 으로만 부르므로
+# libSDL3.so 를 링크하지도, SDL3 헤더를 들여오지도 않는다.
+add_library(flamesdl SHARED flame_sdl.c)
+target_link_libraries(flamesdl ${log-lib} ${dl-lib})
+
 
 # ── PojavLauncher core 소스 (awt_bridge.c 제외) ───────────────
 set(POJAV_SOURCES

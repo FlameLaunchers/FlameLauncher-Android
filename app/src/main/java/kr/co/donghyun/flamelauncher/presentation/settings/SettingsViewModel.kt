@@ -12,7 +12,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kr.co.donghyun.flamelauncher.data.renderer.Renderer
 import kr.co.donghyun.flamelauncher.data.renderer.RendererManager
-import kr.co.donghyun.flamelauncher.data.renderer.RendererPluginManager
 import kr.co.donghyun.flamelauncher.domain.model.JvmSettings
 import kr.co.donghyun.flamelauncher.domain.usecase.GetJvmSettingsUseCase
 import kr.co.donghyun.flamelauncher.domain.usecase.ResetJvmSettingsUseCase
@@ -47,9 +46,6 @@ class SettingsViewModel @Inject constructor(
     init {
         viewModelScope.launch(Dispatchers.IO) {
             _settings.value = getJvmSettingsUseCase()
-        }
-        viewModelScope.launch(Dispatchers.IO) {
-            RendererPluginManager.refresh(context, force = true)
         }
     }
 
