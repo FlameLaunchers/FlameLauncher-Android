@@ -116,7 +116,7 @@ mice and gamepads are picked up the moment they connect — nothing to configure
 | Crashes mid-game | Out of RAM. **Lower the heap allocation** in options — counter-intuitive, but a smaller Java heap leaves room for textures. Lower the render distance too |
 | A modpack won't start | With many mods the first boot takes minutes. If it still fails, try another renderer; Zink and GL4ES differ in what they tolerate |
 | Shaders render garbage | Switch to **Zink**. GL4ES cannot drive shaders properly |
-| 26.3 snapshots won't run | Minecraft swapped GLFW for SDL3. Unsupported; **26.2 works fine** |
+| A shader pack switches itself off (Mali GPUs) | Packs that use `noperspective` — Complementary and its forks — can't compile on Mali, so Iris falls back to no shaders. Turn the pack off to skip the attempt and load faster |
 
 ---
 
