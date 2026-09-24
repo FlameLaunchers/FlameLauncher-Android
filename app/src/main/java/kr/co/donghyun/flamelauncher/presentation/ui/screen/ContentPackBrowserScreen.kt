@@ -1,5 +1,6 @@
 package kr.co.donghyun.flamelauncher.presentation.ui.screen
 
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -51,13 +52,13 @@ import kr.co.donghyun.flamelauncher.presentation.util.window.isCompact
  * - TEXTURE_PACK(Resource Pack): 12
  * - SHADER_PACK: 6552
  */
-enum class ContentType(val classId: Int, val label: String) {
-    MODPACK(4471, "🗂️ 모드팩"),
-    MOD(6, "📂 모드"),
-    DATAPACK(6945, "📦 데이터팩"),
-    TEXTURE_PACK(12, "🎨 텍스처팩"),
-    SHADER_PACK(6552, "📋 쉐이더팩"),
-    WORLD(17, "🗺️ 월드");
+enum class ContentType(val classId: Int, @androidx.annotation.StringRes val labelRes: Int) {
+    MODPACK(4471, R.string.modpack_icon_label),
+    MOD(6, R.string.mods_folder_icon_label),
+    DATAPACK(6945, R.string.datapack_label),
+    TEXTURE_PACK(12, R.string.texture_pack_label),
+    SHADER_PACK(6552, R.string.shader_pack_label),
+    WORLD(17, R.string.world_type_label);
 
     val needsWorldSelection: Boolean get() = this == DATAPACK
 
@@ -138,7 +139,7 @@ fun ContentPackBrowserScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "컨텐츠 검색",
+                    text = stringResource(R.string.content_search_title),
                     color = TextMain,
                     fontSize = if (tablet) 18.sp else 14.sp,
                     fontWeight = FontWeight.Bold
@@ -189,7 +190,7 @@ fun ContentPackBrowserScreen(
                             .padding(horizontal = if (tablet) 14.dp else 12.dp, vertical = if (tablet) 7.dp else 5.dp)
                     ) {
                         Text(
-                            text = type.label,
+                            text = stringResource(type.labelRes),
                             color = if (isSelected) Color.White else TextSub,
                             fontSize = if (tablet) 12.sp else 10.sp,
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
@@ -267,7 +268,7 @@ fun ContentPackBrowserScreen(
                             .padding(horizontal = if (tablet) 12.dp else 10.dp, vertical = if (tablet) 8.dp else 6.dp)
                     ) {
                         Text(
-                            text = if (selectedMcVersion.isBlank()) "🧊 전체 버전" else "🧊 $selectedMcVersion",
+                            text = if (selectedMcVersion.isBlank()) stringResource(R.string.all_versions_chip) else "🧊 $selectedMcVersion",
                             color = if (selectedMcVersion.isNotBlank()) Color.White else TextSub,
                             fontSize = if (tablet) 13.sp else 11.sp,
                             fontWeight = if (selectedMcVersion.isNotBlank()) FontWeight.Bold else FontWeight.Normal,
@@ -281,7 +282,7 @@ fun ContentPackBrowserScreen(
                         modifier = Modifier.heightIn(max = 320.dp).background(BgSurface)
                     ) {
                         DropdownMenuItem(
-                            text = { Text("전체 버전", color = TextMain) },
+                            text = { Text(stringResource(R.string.all_versions), color = TextMain) },
                             onClick = { versionMenuOpen = false; onMcVersionFilter("") }
                         )
                         availableMcVersions.forEach { v ->
@@ -303,7 +304,7 @@ fun ContentPackBrowserScreen(
                             .height(20.dp)
                             .background(BgBorder)
                     )
-                    listOf("" to "🧰 전체", "fabric" to "Fabric", "forge" to "Forge",
+                    listOf("" to stringResource(R.string.all_loaders_chip), "fabric" to "Fabric", "forge" to "Forge",
                         "neoforge" to "NeoForge", "quilt" to "Quilt").forEach { (value, label) ->
                         val isSelected = selectedLoaderFilter == value
                         Box(
@@ -367,11 +368,11 @@ fun ContentPackBrowserScreen(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         if (searchError != null) {
-                            Text("⚠️ 불러오기 실패", color = Color(0xFFFF6B6B), fontSize = if (tablet) 15.sp else 13.sp, fontWeight = FontWeight.Bold)
+                            Text(stringResource(R.string.load_failed), color = Color(0xFFFF6B6B), fontSize = if (tablet) 15.sp else 13.sp, fontWeight = FontWeight.Bold)
                             Spacer(Modifier.height(6.dp))
                             Text(searchError, color = TextSub, fontSize = if (tablet) 12.sp else 10.sp, textAlign = TextAlign.Center)
                         } else {
-                            Text("검색 결과가 없어요", color = TextSub, fontSize = if (tablet) 14.sp else 12.sp)
+                            Text(stringResource(R.string.no_search_results), color = TextSub, fontSize = if (tablet) 14.sp else 12.sp)
                         }
                     }
                 }
@@ -392,17 +393,10 @@ fun ContentPackBrowserScreen(
         if (showCautionDialog) {
             AlertDialog(
                 onDismissRequest = { showCautionDialog = false },
-                title = { Text("⚠️주의: 모드팩은 제대로 호환되지 않을 수 있습니다.", color = TextPrimary) },
+                title = { Text(stringResource(R.string.modpack_caution_title), color = TextPrimary) },
                 text = {
                     Text(
-                        """
-                            모드팩은 기존 Forge/Fabric/NeoForge에 맞게 호환되도록 설계되었습니다.
-                            모드팩이 런처에서는 제대로 동작하지 않을 수 있으며, 일부 모드가 호환되지 않을 수 있습니다.
-                            크래시 원인을 공유하거나, 오류 원인이 되는 모드들에 대해서 모드를 키거나 끄도록 유도하는 기능을 제공하고 있으나,
-                            개발자는 이러한 호환 문제에 대해 Issue를 제공받지 않습니다. 
-                            
-                            따라서 유저가 활성화된 커뮤니티에서 해결 방안을 논의하는 것을 추천드립니다. 
-                        """.trimIndent(),
+                        stringResource(R.string.modpack_caution_body),
                         color = TextSecondary,
                         fontSize = 13.sp,
                     )
@@ -410,11 +404,11 @@ fun ContentPackBrowserScreen(
                 confirmButton = {
                     TextButton(onClick = {
                         showCautionDialog = false
-                    }) { Text("이해했습니다.", color = Color(0xFFFF6B6B)) }
+                    }) { Text(stringResource(R.string.understood_button), color = Color(0xFFFF6B6B)) }
                 },
                 dismissButton = {
                     TextButton(onClick = { showCautionDialog = false }) {
-                        Text("취소", color = TextSecondary)
+                        Text(stringResource(R.string.cancel_button), color = TextSecondary)
                     }
                 },
                 containerColor = BgSurface,

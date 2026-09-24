@@ -1,6 +1,7 @@
 package kr.co.donghyun.flamelauncher.data.repository
 
 import android.content.Context
+import kr.co.donghyun.flamelauncher.R
 import android.util.Log
 import android.widget.Toast
 import com.google.gson.Gson
@@ -337,14 +338,14 @@ class ContentInstallRepositoryImpl @Inject constructor(
             return
         }
         val cfMod = cfModFromItem(mod)
-        if (!beginInstall(mod, "${contentType.label} 설치 중...")) return
+        if (!beginInstall(mod, context.getString(R.string.status_installing_generic, context.getString(contentType.labelRes)))) return
         try {
             when (contentType) {
                 ContentType.MODPACK -> installModpack(cfMod, fileId)
                 else -> {
                     Log.e("FLAME_LAUNCHER",
                         "❌ $contentType 가 installDirect 로 들어옴 — detailLauncher 분기 확인 필요")
-                    _statusMessage.value = "내부 오류: 설치 타겟이 지정되지 않음"
+                    _statusMessage.value = context.getString(R.string.status_internal_no_target)
                 }
             }
         } catch (e: Exception) {
@@ -365,7 +366,7 @@ class ContentInstallRepositoryImpl @Inject constructor(
      *  4) 공통 마무리(finalizeModpackInstance): 바닐라 MC + 로더 설치 + 메타 저장.
      */
     suspend fun installModrinthModpack(mod: ContentItem, mrVersionId: String? = null) {
-            if (!beginInstall(mod, "${mod.name} 모드팩 설치 중...")) return
+            if (!beginInstall(mod, context.getString(R.string.status_installing_modpack, mod.name))) return
             try {
                 val prepared = withContext(Dispatchers.IO) {
                     val versions = modrinthApi.getVersions(mod.id)
@@ -384,6 +385,7 @@ class ContentInstallRepositoryImpl @Inject constructor(
                     instanceDir.mkdirs()
                     cleanStaleInstanceFilesForReinstall(instanceDir)
                     val installer = MrpackInstaller(
+                        context = context,
                         baseDir = instanceDir,
                         modrinthApi = modrinthApi,
                         onProgress = { _progress.value = it }
@@ -391,19 +393,20 @@ class ContentInstallRepositoryImpl @Inject constructor(
                     Triple(installer.install(file.url, mod.name), instanceDir, version)
                 }
                 if (prepared == null) {
-                    _statusMessage.value = "❌ ${mod.name} 파일 정보를 가져올 수 없음"
+                    _statusMessage.value = context.getString(R.string.status_no_file_info, mod.name)
                     return
                 }
                 val (installResult, instanceDir, rootVersion) = prepared
                 if (!installResult.success) {
-                    _statusMessage.value = "❌ ${mod.name} 설치 실패: ${installResult.error ?: "알 수 없음"}"
+                    _statusMessage.value = context.getString(R.string.status_install_failed, mod.name,
+                        installResult.error ?: context.getString(R.string.unknown_label))
                     return
                 }
 
                 // ── 3) 누락 의존성 보강 ──
                 //   .mrpack 전개 후 mods/ 를 스캔해, manifest 의 required 의존성 중
                 //   아직 설치 안 된 프로젝트를 호환 버전으로 받아 채운다.
-                _statusMessage.value = "의존성 확인 중..."
+                _statusMessage.value = context.getString(R.string.status_checking_deps)
                 withContext(Dispatchers.IO) {
                     installMissingMrpackDependencies(
                         rootVersion = rootVersion,
@@ -426,7 +429,7 @@ class ContentInstallRepositoryImpl @Inject constructor(
                     iconUrl = mod.logoUrl,
                 )
                 _progress.value = DownloadProgress(phase = DownloadPhase.DONE)
-                _statusMessage.value = "✅ ${mod.name} 설치 완료"
+                _statusMessage.value = context.getString(R.string.status_install_done, mod.name)
             } catch (e: Exception) {
                 Log.e("FLAME_LAUNCHER", "Modrinth 모드팩 설치 실패: ${e.message}", e)
                 _progress.value = DownloadProgress(phase = DownloadPhase.ERROR, error = e.message)
@@ -481,7 +484,7 @@ class ContentInstallRepositoryImpl @Inject constructor(
                 return@forEach
             }
             try {
-                _statusMessage.value = "의존성 ${f.filename} 다운로드 중..."
+                _statusMessage.value = context.getString(R.string.status_downloading_dep, f.filename)
                 downloadFile(f.url, outFile, f.filename)
                 if (outFile.exists() && outFile.length() > 0) {
                     installedPrefixes += prefix
@@ -699,11 +702,10 @@ class ContentInstallRepositoryImpl @Inject constructor(
             fetchLatestFileForVersion(mod.id, meta.mcVersion, loaderFilter)
         } ?: run {
             Log.w("FLAME_LAUNCHER", "❌ ${mod.name} — MC ${meta.mcVersion} 호환 파일 없음")
-            _statusMessage.value = "${mod.name} — MC ${meta.mcVersion} 호환 파일 없음"
-            _errorDialogMessage.value =
-                "‘${mod.name}’ 는 이 인스턴스(MC ${meta.mcVersion}" +
-                        (meta.loaderType?.let { " · $it" } ?: "") + ")에 맞는 버전이 없습니다.\n" +
-                        "다른 인스턴스를 고르거나, 호환되는 마인크래프트 버전으로 새 인스턴스를 만들어 주세요."
+            _statusMessage.value = context.getString(R.string.status_no_compatible_file, mod.name, meta.mcVersion)
+            _errorDialogMessage.value = context.getString(
+                R.string.msg_no_compatible_version, mod.name, meta.mcVersion,
+                meta.loaderType?.let { " · $it" } ?: "")
             return false
         }
 
@@ -719,27 +721,25 @@ class ContentInstallRepositoryImpl @Inject constructor(
                 Log.w("FLAME_LAUNCHER",
                     "❌ ${mod.name} 버전 불일치 — 인스턴스 MC ${meta.mcVersion}, " +
                             "파일 지원 ${fileMcVersions.joinToString()} (${rootFile.fileName})")
-                _statusMessage.value = "${mod.name} — MC ${meta.mcVersion} 비호환"
-                _errorDialogMessage.value =
-                    "‘${mod.name}’ 는 이 인스턴스(MC ${meta.mcVersion})와 버전이 맞지 않습니다.\n" +
-                            "이 모드가 지원하는 버전: ${fileMcVersions.joinToString(", ")}\n" +
-                            "해당 버전의 인스턴스를 고르거나 새로 만들어 주세요."
+                _statusMessage.value = context.getString(R.string.status_incompatible, mod.name, meta.mcVersion)
+                _errorDialogMessage.value = context.getString(
+                    R.string.msg_version_mismatch, mod.name, meta.mcVersion, fileMcVersions.joinToString(", "))
                 return false
             }
         }
 
         if (contentType == ContentType.WORLD) {
-            _statusMessage.value = "맵 설치 중..."
+            _statusMessage.value = context.getString(R.string.status_installing_map)
             return installWorld(rootFile, instanceDir, meta.mcVersion)
         }
 
         if (contentType == ContentType.DATAPACK) {
             if (worldName.isNullOrBlank()) {
                 Log.e("FLAME_LAUNCHER", "📦 데이터팩 설치인데 대상 월드가 지정되지 않음")
-                _statusMessage.value = "데이터팩을 넣을 월드를 선택해주세요."
+                _statusMessage.value = context.getString(R.string.status_pick_world_for_datapack)
                 return false
             }
-            _statusMessage.value = "데이터팩 설치 중..."
+            _statusMessage.value = context.getString(R.string.status_installing_datapack)
             return installDatapack(rootFile, instanceDir, meta.mcVersion, worldName)
         }
 
@@ -777,7 +777,7 @@ class ContentInstallRepositoryImpl @Inject constructor(
         // ── 4) 순차 다운로드 (충돌 jar 정리 → 다운로드) ──────────────
         var allOk = true
         allItems.forEachIndexed { idx, (m, f) ->
-            _statusMessage.value = "[${idx + 1}/${allItems.size}] ${m.name} 다운로드 중..."
+            _statusMessage.value = context.getString(R.string.status_downloading_indexed, idx + 1, allItems.size, m.name)
 
             // 같은 prefix의 다른 버전 jar 정리 (이번에 받을 파일과 정확히 같은 이름은 보존)
             if (contentType == ContentType.MOD) {
@@ -856,16 +856,15 @@ class ContentInstallRepositoryImpl @Inject constructor(
             pickModrinthVersion(item.id, meta.mcVersion, loaderFilter)
         } ?: run {
             Log.w("FLAME_LAUNCHER", "❌ ${item.name} — MC ${meta.mcVersion} 호환 Modrinth 버전 없음")
-            _statusMessage.value = "${item.name} — MC ${meta.mcVersion} 호환 버전 없음"
-            _errorDialogMessage.value =
-                "‘${item.name}’ 는 이 인스턴스(MC ${meta.mcVersion}" +
-                        (meta.loaderType?.let { " · $it" } ?: "") + ")에 맞는 버전이 없습니다.\n" +
-                        "다른 인스턴스를 고르거나, 호환되는 마인크래프트 버전으로 새 인스턴스를 만들어 주세요."
+            _statusMessage.value = context.getString(R.string.status_no_compatible_file, item.name, meta.mcVersion)
+            _errorDialogMessage.value = context.getString(
+                R.string.msg_no_compatible_version, item.name, meta.mcVersion,
+                meta.loaderType?.let { " · $it" } ?: "")
             return false
         }
         val rootFile = rootVersion.files.firstOrNull { it.primary } ?: rootVersion.files.firstOrNull()
         ?: run {
-            _statusMessage.value = "${item.name} — 다운로드 파일 없음"
+            _statusMessage.value = context.getString(R.string.status_no_download_file, item.name)
             return false
         }
 
@@ -880,26 +879,24 @@ class ContentInstallRepositoryImpl @Inject constructor(
                 Log.w("FLAME_LAUNCHER",
                     "❌ ${item.name} 버전 불일치 — 인스턴스 MC ${meta.mcVersion}, " +
                             "버전 지원 ${verMcVersions.joinToString()} (${rootFile.filename})")
-                _statusMessage.value = "${item.name} — MC ${meta.mcVersion} 비호환"
-                _errorDialogMessage.value =
-                    "‘${item.name}’ 는 이 인스턴스(MC ${meta.mcVersion})와 버전이 맞지 않습니다.\n" +
-                            "이 모드가 지원하는 버전: ${verMcVersions.joinToString(", ")}\n" +
-                            "해당 버전의 인스턴스를 고르거나 새로 만들어 주세요."
+                _statusMessage.value = context.getString(R.string.status_incompatible, item.name, meta.mcVersion)
+                _errorDialogMessage.value = context.getString(
+                    R.string.msg_version_mismatch, item.name, meta.mcVersion, verMcVersions.joinToString(", "))
                 return false
             }
         }
 
         if (contentType == ContentType.WORLD) {
-            _statusMessage.value = "Modrinth 는 맵(월드) 설치를 지원하지 않습니다."
+            _statusMessage.value = context.getString(R.string.status_modrinth_no_maps)
             return false
         }
 
         if (contentType == ContentType.DATAPACK) {
             if (worldName.isNullOrBlank()) {
-                _statusMessage.value = "데이터팩을 넣을 월드를 선택해주세요."
+                _statusMessage.value = context.getString(R.string.status_pick_world_for_datapack)
                 return false
             }
-            _statusMessage.value = "데이터팩 설치 중..."
+            _statusMessage.value = context.getString(R.string.status_installing_datapack)
             return installModrinthDatapack(rootFile.url, rootFile.filename, instanceDir, meta.mcVersion, worldName)
         }
 
@@ -926,7 +923,7 @@ class ContentInstallRepositoryImpl @Inject constructor(
         // ── 4) 순차 다운로드 ─────────────────────────────────────────
         var allOk = true
         items.forEachIndexed { idx, f ->
-            _statusMessage.value = "[${idx + 1}/${items.size}] ${f.filename} 다운로드 중..."
+            _statusMessage.value = context.getString(R.string.status_downloading_indexed, idx + 1, items.size, f.filename)
             if (contentType == ContentType.MOD) {
                 withContext(Dispatchers.IO) { removeConflictingJars(outDir, f.filename) }
             }
@@ -1126,7 +1123,7 @@ class ContentInstallRepositoryImpl @Inject constructor(
         worldName: String? = null,   // 데이터팩일 때 대상 월드
     ) {
         if (mod.source == ContentSource.MODRINTH) {
-            if (!beginInstall(mod, "${mod.name} → 인스턴스($instanceId) 설치 중...")) return
+            if (!beginInstall(mod, context.getString(R.string.status_installing_into_instance, mod.name, instanceId))) return
             try {
                 addModrinthContentToInstance(mod, instanceId, contentType, worldName)
             } catch (e: Exception) {
@@ -1137,7 +1134,7 @@ class ContentInstallRepositoryImpl @Inject constructor(
             return
         }
         val cfMod = cfModFromItem(mod)
-        if (!beginInstall(mod, "${mod.name} → 인스턴스($instanceId) 설치 중...")) return
+        if (!beginInstall(mod, context.getString(R.string.status_installing_into_instance, mod.name, instanceId))) return
         try {
             addContentToInstance(cfMod, instanceId, contentType, worldName)
         } catch (e: Exception) {
@@ -1157,13 +1154,13 @@ class ContentInstallRepositoryImpl @Inject constructor(
         val isModrinth = mod.source == ContentSource.MODRINTH
         val cfMod = if (isModrinth) null else cfModFromItem(mod)
         val loaderName = loader?.displayName ?: "Vanilla"
-        if (!beginInstall(mod, "$loaderName $mcVersion 인스턴스 준비 중...")) return
+        if (!beginInstall(mod, context.getString(R.string.status_preparing_instance, loaderName, mcVersion))) return
         try {
             val versionEntry = withContext(Dispatchers.IO) {
                 VersionRepository().fetchVersionList().firstOrNull { it.id == mcVersion }
             } ?: run {
                 Log.e("FLAME_LAUNCHER", "MC $mcVersion manifest 못 찾음")
-                _statusMessage.value = "MC $mcVersion 를 찾을 수 없습니다."
+                _statusMessage.value = context.getString(R.string.status_mc_not_found, mcVersion)
                 return
             }
 
@@ -1174,7 +1171,7 @@ class ContentInstallRepositoryImpl @Inject constructor(
                 ModLoader.NEOFORGE -> setupForgeInstance(mcVersion, versionEntry, isNeoForge = true,  newToken = newToken) ?: return
             }
 
-            _statusMessage.value = "${mod.name} 다운로드 중..."
+            _statusMessage.value = context.getString(R.string.status_downloading, mod.name)
             if (isModrinth) {
                 addModrinthContentToInstance(mod, instanceId, contentType)
             } else {
@@ -1212,7 +1209,7 @@ class ContentInstallRepositoryImpl @Inject constructor(
         }
 
         _progress.value = DownloadProgress(phase = DownloadPhase.FETCHING_MANIFEST)
-        _statusMessage.value = "MC $mcVersion 다운로드 중..."
+        _statusMessage.value = context.getString(R.string.status_downloading_mc, mcVersion)
         val mcResult = withContext(Dispatchers.IO) {
             MinecraftDownloader(instanceDir, versionEntry) { _progress.value = it }.prepare()
         }
@@ -1264,12 +1261,12 @@ class ContentInstallRepositoryImpl @Inject constructor(
         }
 
         _progress.value = DownloadProgress(phase = DownloadPhase.FETCHING_MANIFEST)
-        _statusMessage.value = "MC $mcVersion 다운로드 중..."
+        _statusMessage.value = context.getString(R.string.status_downloading_mc, mcVersion)
         val mcResult = withContext(Dispatchers.IO) {
             MinecraftDownloader(instanceDir, versionEntry) { _progress.value = it }.prepare()
         }
 
-        _statusMessage.value = "Fabric $loaderVersion 설치 중..."
+        _statusMessage.value = context.getString(R.string.status_installing_loader, "Fabric", loaderVersion)
         val fr = withContext(Dispatchers.IO) {
             FabricInstaller(instanceDir) { msg, cur, tot ->
                 _progress.value = DownloadProgress(
@@ -1327,7 +1324,7 @@ class ContentInstallRepositoryImpl @Inject constructor(
         if (loaderList.isEmpty()) {
             val name = if (isNeoForge) "NeoForge" else "Forge"
             Log.e("FLAME_LAUNCHER", "$name 후보 없음 mc=$mcVersion")
-            _statusMessage.value = "$mcVersion 용 $name 빌드가 없습니다."
+            _statusMessage.value = context.getString(R.string.status_no_build, name, mcVersion)
             return null
         }
         val forgeVersion = loaderList.firstOrNull { it.recommended }?.forgeVersion
@@ -1345,13 +1342,14 @@ class ContentInstallRepositoryImpl @Inject constructor(
 
         // 1) MC 다운로드
         _progress.value = DownloadProgress(phase = DownloadPhase.FETCHING_MANIFEST)
-        _statusMessage.value = "MC $mcVersion 다운로드 중..."
+        _statusMessage.value = context.getString(R.string.status_downloading_mc, mcVersion)
         val mcResult = withContext(Dispatchers.IO) {
             MinecraftDownloader(instanceDir, versionEntry) { _progress.value = it }.prepare()
         }
 
         // 2) Forge / NeoForge 설치
-        _statusMessage.value = "${if (isNeoForge) "NeoForge" else "Forge"} $forgeVersion 설치 중..."
+        _statusMessage.value = context.getString(R.string.status_installing_loader,
+            if (isNeoForge) "NeoForge" else "Forge", forgeVersion)
         val fr = withContext(Dispatchers.IO) {
             ForgeInstaller(instanceDir) { msg, cur, tot ->
                 _progress.value = DownloadProgress(
@@ -1362,7 +1360,7 @@ class ContentInstallRepositoryImpl @Inject constructor(
         }
         if (!fr.success) {
             Log.e("FLAME_LAUNCHER", "Forge 설치 실패: ${fr.error}")
-            _statusMessage.value = "Forge 설치 실패: ${fr.error}"
+            _statusMessage.value = context.getString(R.string.status_loader_install_failed, "Forge", fr.error)
             return null
         }
 
@@ -1370,7 +1368,7 @@ class ContentInstallRepositoryImpl @Inject constructor(
             Log.i("FLAME_LAUNCHER",
                 "Forge 1.13+ — 최초 실행 시 별도 빌더 프로세스가 client jar 를 생성합니다(BinaryPatcher 등). " +
                         "시간이 걸릴 수 있습니다.")
-            _statusMessage.value = "Modern Forge — 최초 실행 시 client jar 생성이 수행됩니다."
+            _statusMessage.value = context.getString(R.string.status_modern_forge_note)
         }
         File(instanceDir, "mods").mkdirs()
 
@@ -1422,16 +1420,17 @@ class ContentInstallRepositoryImpl @Inject constructor(
             else fetchLatestFileForVersion(mod.id, gameVersion = null, loaderType = null)
         } ?: run {
             Log.e("FLAME_LAUNCHER", "❌ 모드팩 파일 정보 못 가져옴: mod=${mod.id} fileId=$fileId")
-            _statusMessage.value = "❌ ${mod.name} 파일 정보를 가져올 수 없음"
-            _progress.value = DownloadProgress(phase = DownloadPhase.ERROR, error = "파일 정보 없음")
+            _statusMessage.value = context.getString(R.string.status_no_file_info, mod.name)
+            _progress.value = DownloadProgress(phase = DownloadPhase.ERROR, error = context.getString(R.string.err_no_file_info))
             return
         }
         Log.d("FLAME_LAUNCHER", "📦 모드팩 설치 파일 확정: ${file.displayName} (id=${file.id}, rt=${file.releaseType})")
 
         // ── 1) 모드팩 zip 다운로드 + manifest 파싱 + overrides + 필수 모드들 ──
-        _statusMessage.value = "${mod.name} 모드팩 추출 중..."
+        _statusMessage.value = context.getString(R.string.status_extracting_modpack, mod.name)
         val packResult = withContext(Dispatchers.IO) {
             ModPackInstaller(
+                context = context,
                 baseDir = instanceDir,
                 curseForgeApi = CurseForgeAPI(),
                 onProgress = { _progress.value = it }
@@ -1439,7 +1438,7 @@ class ContentInstallRepositoryImpl @Inject constructor(
         }
         if (!packResult.success) {
             Log.e("FLAME_LAUNCHER", "❌ ModPackInstaller 실패: ${packResult.error}")
-            _statusMessage.value = "❌ 모드팩 추출 실패: ${packResult.error}"
+            _statusMessage.value = context.getString(R.string.status_modpack_extract_failed, packResult.error)
             _progress.value = DownloadProgress(phase = DownloadPhase.ERROR, error = packResult.error)
             return
         }
@@ -1480,7 +1479,7 @@ class ContentInstallRepositoryImpl @Inject constructor(
         iconUrl: String? = null,        // 콘텐츠 로고 URL(CurseForge/Modrinth). 받아서 인스턴스 아이콘으로 저장.
     ) {
         // ── 1.5) Sodium 본체가 모드팩에 있으면 Podium 자동 동봉 ──
-        _statusMessage.value = "Sodium 호환 점검 중..."
+        _statusMessage.value = context.getString(R.string.status_checking_sodium)
         installPodiumIfSodiumInModpack(instanceDir, mcVersion, loaderType)
 
         // ── 2) Mojang manifest 에서 해당 MC 버전 entry 확보 ─────────
@@ -1489,13 +1488,13 @@ class ContentInstallRepositoryImpl @Inject constructor(
                 .getOrNull()
         } ?: run {
             Log.e("FLAME_LAUNCHER", "❌ MC $mcVersion manifest 없음")
-            _statusMessage.value = "❌ MC $mcVersion 매니페스트를 찾을 수 없음"
-            _progress.value = DownloadProgress(phase = DownloadPhase.ERROR, error = "MC manifest 없음")
+            _statusMessage.value = context.getString(R.string.status_no_manifest, mcVersion)
+            _progress.value = DownloadProgress(phase = DownloadPhase.ERROR, error = context.getString(R.string.err_no_manifest))
             return
         }
 
         // ── 3) 바닐라 MC 다운로드 (인스턴스 dir 안으로) ─────────────
-        _statusMessage.value = "MC $mcVersion 다운로드 중..."
+        _statusMessage.value = context.getString(R.string.status_downloading_mc, mcVersion)
         val mcResult = withContext(Dispatchers.IO) {
             MinecraftDownloader(instanceDir, versionEntry) { _progress.value = it }.prepare()
         }
@@ -1509,10 +1508,10 @@ class ContentInstallRepositoryImpl @Inject constructor(
         val finalMeta: InstanceMeta = when (loaderType) {
             "fabric" -> {
                 if (loaderVersion.isNullOrBlank()) {
-                    _statusMessage.value = "❌ Fabric loader 버전이 manifest 에 없음"
+                    _statusMessage.value = context.getString(R.string.status_loader_version_missing, "Fabric")
                     return
                 }
-                _statusMessage.value = "Fabric $loaderVersion 설치 중..."
+                _statusMessage.value = context.getString(R.string.status_installing_loader, "Fabric", loaderVersion)
                 val fr = withContext(Dispatchers.IO) {
                     FabricInstaller(instanceDir) { msg, cur, tot ->
                         _progress.value = DownloadProgress(
@@ -1523,7 +1522,7 @@ class ContentInstallRepositoryImpl @Inject constructor(
                 }
                 if (!fr.success) {
                     Log.e("FLAME_LAUNCHER", "❌ Fabric 설치 실패: ${fr.error}")
-                    _statusMessage.value = "❌ Fabric 설치 실패: ${fr.error}"
+                    _statusMessage.value = "❌ " + context.getString(R.string.status_loader_install_failed, "Fabric", fr.error)
                     _progress.value = DownloadProgress(phase = DownloadPhase.ERROR, error = fr.error)
                     return
                 }
@@ -1547,10 +1546,10 @@ class ContentInstallRepositoryImpl @Inject constructor(
 
             "quilt" -> {
                 if (loaderVersion.isNullOrBlank()) {
-                    _statusMessage.value = "❌ Quilt loader 버전이 manifest 에 없음"
+                    _statusMessage.value = context.getString(R.string.status_loader_version_missing, "Quilt")
                     return
                 }
-                _statusMessage.value = "Quilt $loaderVersion 설치 중..."
+                _statusMessage.value = context.getString(R.string.status_installing_loader, "Quilt", loaderVersion)
                 val qr = withContext(Dispatchers.IO) {
                     QuiltInstaller(instanceDir) { msg, cur, tot ->
                         _progress.value = DownloadProgress(
@@ -1561,7 +1560,7 @@ class ContentInstallRepositoryImpl @Inject constructor(
                 }
                 if (!qr.success) {
                     Log.e("FLAME_LAUNCHER", "❌ Quilt 설치 실패: ${qr.error}")
-                    _statusMessage.value = "❌ Quilt 설치 실패: ${qr.error}"
+                    _statusMessage.value = "❌ " + context.getString(R.string.status_loader_install_failed, "Quilt", qr.error)
                     _progress.value = DownloadProgress(phase = DownloadPhase.ERROR, error = qr.error)
                     return
                 }
@@ -1585,12 +1584,12 @@ class ContentInstallRepositoryImpl @Inject constructor(
 
             "forge", "neoforge" -> {
                 if (loaderVersion.isNullOrBlank()) {
-                    _statusMessage.value = "❌ $loaderType loader 버전이 manifest 에 없음"
+                    _statusMessage.value = context.getString(R.string.status_loader_version_missing, loaderType)
                     return
                 }
                 val isNeoForge = loaderType == "neoforge"
                 val label = if (isNeoForge) "NeoForge" else "Forge"
-                _statusMessage.value = "$label $loaderVersion 설치 중..."
+                _statusMessage.value = context.getString(R.string.status_installing_loader, label, loaderVersion)
                 val fr = withContext(Dispatchers.IO) {
                     ForgeInstaller(instanceDir) { msg, cur, tot ->
                         _progress.value = DownloadProgress(
@@ -1601,7 +1600,7 @@ class ContentInstallRepositoryImpl @Inject constructor(
                 }
                 if (!fr.success) {
                     Log.e("FLAME_LAUNCHER", "❌ $label 설치 실패: ${fr.error}")
-                    _statusMessage.value = "❌ $label 설치 실패: ${fr.error}"
+                    _statusMessage.value = "❌ " + context.getString(R.string.status_loader_install_failed, label, fr.error)
                     _progress.value = DownloadProgress(phase = DownloadPhase.ERROR, error = fr.error)
                     return
                 }
@@ -1653,7 +1652,7 @@ class ContentInstallRepositoryImpl @Inject constructor(
         InstanceManager.saveMeta(context, finalMeta)
 
         _progress.value = DownloadProgress(phase = DownloadPhase.DONE)
-        _statusMessage.value = "✅ $displayName 설치 완료"
+        _statusMessage.value = context.getString(R.string.status_install_done, displayName)
         Log.d("FLAME_LAUNCHER", "✅ 모드팩 인스턴스 생성 완료: $instanceId (${finalMeta.loaderType ?: "vanilla"})")
     }
 
@@ -2027,7 +2026,7 @@ class ContentInstallRepositoryImpl @Inject constructor(
         val isLoggedIn = session != null && session.refreshToken.isNotEmpty()
 
         if (!isLoggedIn) {
-            Toast.makeText(context, "로그인 이후에 플레이가 가능합니다.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, context.getString(R.string.msg_login_required), Toast.LENGTH_SHORT).show()
             return null
         }
 
@@ -2036,7 +2035,7 @@ class ContentInstallRepositoryImpl @Inject constructor(
         val meta = InstanceManager.loadMeta(instanceDir)
         if (meta == null) {
             Log.e("FLAME_LAUNCHER", "❌ 인스턴스 메타 없음: $instanceId — 모드팩을 다시 설치하세요")
-            _statusMessage.value = "❌ ${mod.name} 인스턴스가 없음 — 다시 설치하세요"
+            _statusMessage.value = context.getString(R.string.status_instance_missing, mod.name)
             return null
         }
 
@@ -2064,7 +2063,7 @@ class ContentInstallRepositoryImpl @Inject constructor(
             )
         } catch (e: Exception) {
             Log.e("FLAME_LAUNCHER", "▶ 실행 준비 실패: ${e.message}", e)
-            _statusMessage.value = "❌ 실행 실패: ${e.message}"
+            _statusMessage.value = context.getString(R.string.status_launch_failed, e.message ?: "")
             null
         }
     }
@@ -2127,8 +2126,8 @@ class ContentInstallRepositoryImpl @Inject constructor(
             val current = _installingModId.value
             Toast.makeText(
                 context,
-                if (current == mod.trackKey) "이미 설치 중입니다."
-                else "다른 항목을 설치하는 중입니다. 완료된 후 다시 시도해주세요.",
+                if (current == mod.trackKey) context.getString(R.string.status_already_installing)
+                else context.getString(R.string.status_other_install_running),
                 Toast.LENGTH_SHORT
             ).show()
             return false

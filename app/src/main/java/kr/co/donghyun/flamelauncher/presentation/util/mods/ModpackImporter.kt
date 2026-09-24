@@ -1,5 +1,6 @@
 package kr.co.donghyun.flamelauncher.presentation.util.mods
 
+import kr.co.donghyun.flamelauncher.R
 import android.content.Context
 import android.net.Uri
 import android.util.Log
@@ -86,7 +87,7 @@ object ModpackImporter {
             try {
                 context.contentResolver.openInputStream(zipUri)?.use { input ->
                     tempZip.outputStream().use { input.copyTo(it) }
-                } ?: return@withContext Result.Failure("파일을 열 수 없습니다.")
+                } ?: return@withContext Result.Failure(context.getString(R.string.err_cannot_open_file))
 
                 val cfManifest = readCurseForgeManifest(tempZip)
                 val manifest = cfManifest?.let {
@@ -108,8 +109,8 @@ object ModpackImporter {
                 // (현재 로더 null = 바닐라 → 모든 모드 로더와 "다름")
                 if (packLoader != null && packLoader != curLoader) {
                     return@withContext Result.Failure(
-                        "모드 로더가 달라 가져올 수 없어요. " +
-                                "(모드팩: ${loaderDisplay(packLoader)} · 현재 인스턴스: ${loaderDisplay(curLoader)})"
+                        context.getString(R.string.err_loader_mismatch,
+                            loaderDisplay(context, packLoader), loaderDisplay(context, curLoader))
                     )
                 }
 
@@ -253,7 +254,7 @@ object ModpackImporter {
                 }
 
                 if (modCount == 0 && configCount == 0) {
-                    return@withContext Result.Failure("이 zip 에서 가져올 모드/설정을 찾지 못했어요. 올바른 모드팩 zip 인가요?")
+                    return@withContext Result.Failure(context.getString(R.string.err_nothing_to_import))
                 }
 
                 val packMc = manifest?.mcVersion
@@ -266,7 +267,7 @@ object ModpackImporter {
                 tempZip.delete()
             }
         } catch (e: Exception) {
-            Result.Failure("가져오기 실패: ${e.message}")
+            Result.Failure(context.getString(R.string.err_import_failed, e.message ?: ""))
         }
     }
 
@@ -300,11 +301,11 @@ object ModpackImporter {
         else -> null to null
     }
 
-    private fun loaderDisplay(loader: String?): String = when (loader) {
+    private fun loaderDisplay(context: Context, loader: String?): String = when (loader) {
         "fabric"   -> "Fabric"
         "forge"    -> "Forge"
         "neoforge" -> "NeoForge"
-        null       -> "없음(바닐라)"
+        null       -> context.getString(R.string.loader_none_vanilla)
         else       -> loader
     }
 

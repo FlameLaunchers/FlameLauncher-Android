@@ -40,7 +40,9 @@ import androidx.compose.ui.graphics.vector.addPathNodes
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.annotation.StringRes
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -66,10 +68,10 @@ import java.net.URL
 
 /// 아이콘은 iOS 판(MainTab.icon)과 같은 모양이다:
 /// internaldrive.fill · checkmark.seal.fill · square.grid.2x2.fill
-enum class MainTab(val label: String, val icon: ImageVector) {
-    INSTALLED("설치됨", HardDriveIcon),
-    RELEASE("정식", Icons.Filled.Verified),
-    ALL("전체", Icons.Filled.GridView),
+enum class MainTab(@StringRes val labelRes: Int, val icon: ImageVector) {
+    INSTALLED(R.string.installed_label, HardDriveIcon),
+    RELEASE(R.string.release_label, Icons.Filled.Verified),
+    ALL(R.string.all_label, Icons.Filled.GridView),
 }
 
 /// Material Symbols "hard_drive"(Apache 2.0) — iOS 의 internaldrive.fill 과 같은 모양.
@@ -92,21 +94,21 @@ private val HardDriveIcon: ImageVector =
 /// ⚠️ 예전에는 상단 배너에 아이콘 버튼을 늘어놓았다. 같은 곳으로 가는 입구가 두 개가 되고
 ///    (배너 + 메뉴) 화면이 좁아질수록 이름이 잘려서, 왼쪽 목록 하나로 합쳤다.
 enum class MainSection(
-    val title: String,
-    val subtitle: String,
+    @StringRes val titleRes: Int,
+    @StringRes val subtitleRes: Int,
     val icon: androidx.compose.ui.graphics.vector.ImageVector,
     /// 오른쪽 본문에서 다루는가(아니면 다른 화면으로 넘어가는가).
     val showsInDetail: Boolean,
 ) {
-    INSTANCES("인스턴스 선택", "버전을 고르고 실행",
+    INSTANCES(R.string.section_instances_title, R.string.section_instances_subtitle,
         androidx.compose.material.icons.Icons.Filled.Dashboard, true),
-    MODPACKS("모드팩 설치", "CurseForge · Modrinth",
+    MODPACKS(R.string.section_modpacks_title, R.string.section_modpacks_subtitle,
         androidx.compose.material.icons.Icons.Filled.Inventory2, false),
-    SETTINGS("옵션 · 렌더러", "메모리 · 해상도 · 렌더러",
+    SETTINGS(R.string.section_settings_title, R.string.section_settings_subtitle,
         androidx.compose.material.icons.Icons.Filled.Tune, false),
-    KEYBOARD("키보드 편집", "화면 버튼 배치",
+    KEYBOARD(R.string.section_keyboard_title, R.string.section_keyboard_subtitle,
         androidx.compose.material.icons.Icons.Filled.Keyboard, false),
-    NOTES("업데이트 노트", "저장소 README",
+    NOTES(R.string.section_notes_title, R.string.section_notes_subtitle,
         androidx.compose.material.icons.Icons.AutoMirrored.Filled.Article, true),
 }
 
@@ -370,7 +372,7 @@ private fun SectionRow(section: MainSection, selected: Boolean, onClick: () -> U
         )
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = section.title,
+                text = stringResource(section.titleRes),
                 color = if (selected) Color.White else TextPrimary,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
@@ -378,7 +380,7 @@ private fun SectionRow(section: MainSection, selected: Boolean, onClick: () -> U
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                text = section.subtitle,
+                text = stringResource(section.subtitleRes),
                 color = if (selected) Color.White.copy(alpha = 0.75f) else TextSecondary,
                 fontSize = 10.sp,
                 maxLines = 1,
@@ -428,7 +430,7 @@ private fun MainTabBar(
                     modifier = Modifier.padding(bottom = 2.dp).size(16.dp),
                 )
                 Text(
-                    text = tab.label,
+                    text = stringResource(tab.labelRes),
                     color = if (isSelected) Color.White else TextSecondary,
                     fontSize = 11.sp,
                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
@@ -709,7 +711,7 @@ private fun InstalledPanel(
             modifier = Modifier.width(if (tablet) 130.dp else 96.dp).height(rowHeight),
         ) {
             Text(
-                if (isLoggedIn || BuildConfig.DEBUG) context.getString(R.string.launch_button) else "로그인",
+                if (isLoggedIn || BuildConfig.DEBUG) context.getString(R.string.launch_button) else stringResource(R.string.login_short),
                 color = Color.White, fontSize = if (tablet) 15.sp else 13.sp,
                 fontWeight = FontWeight.Bold, maxLines = 1,
             )
@@ -819,7 +821,7 @@ private fun MobileTopBar(
                 contentAlignment = Alignment.Center,
             ) {
                 if (skinFace != null) {
-                    Image(bitmap = skinFace!!, contentDescription = "프로필", modifier = Modifier.fillMaxSize(), contentScale = ContentScale.FillBounds)
+                    Image(bitmap = skinFace!!, contentDescription = stringResource(R.string.profile_label), modifier = Modifier.fillMaxSize(), contentScale = ContentScale.FillBounds)
                 } else {
                     Text(
                         if (isLoggedIn) username?.take(1)?.uppercase() ?: "?" else "👤",
@@ -835,7 +837,7 @@ private fun MobileTopBar(
                     )
                 } else {
                     DropdownMenuItem(
-                        text = { Text("로그인", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = FlamePrimary) },
+                        text = { Text(stringResource(R.string.login_short), fontSize = 13.sp, fontWeight = FontWeight.Bold, color = FlamePrimary) },
                         onClick = { showProfileMenu = false; onLogin() },
                     )
                 }
@@ -883,7 +885,7 @@ private fun MobileBottomBar(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = if (progress.phase == DownloadPhase.ERROR) "❌ ${progress.error ?: "오류"}" else progress.fileName.ifEmpty { "다운로드 중…" },
+                    text = if (progress.phase == DownloadPhase.ERROR) "❌ ${progress.error ?: stringResource(R.string.error_label)}" else progress.fileName.ifEmpty { stringResource(R.string.downloading_label) },
                     color = if (progress.phase == DownloadPhase.ERROR) Color(0xFFFF6B6B) else TextSecondary,
                     fontSize = 8.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
@@ -912,7 +914,7 @@ private fun MobileBottomBar(
                     selectedInstance?.let { InstanceIcon(meta = it, size = 22.dp) }
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        selectedInstance?.name ?: "인스턴스를 골라주세요",
+                        selectedInstance?.name ?: stringResource(R.string.pick_instance_hint),
                         color = if (selectedInstance != null) TextPrimary else TextSecondary,
                         fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
                         maxLines = 1, overflow = TextOverflow.Ellipsis,
@@ -949,7 +951,7 @@ private fun MobileBottomBar(
                     CircularProgressIndicator(color = Color.White, modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
                 } else {
                     Text(
-                        if (!isLoggedIn && !BuildConfig.DEBUG) "로그인" else "▶  Play",
+                        if (!isLoggedIn && !BuildConfig.DEBUG) stringResource(R.string.login_short) else "▶  Play",
                         color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp,
                     )
                 }

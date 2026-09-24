@@ -500,7 +500,7 @@ private fun InstallTargetDialog(
                 verticalArrangement = Arrangement.spacedBy(verticalGap)
             ) {
                 // ── 헤더 (고정) ──
-                Text(context.getString(R.string.install_target_select_for_type, contentType.label),
+                Text(context.getString(R.string.install_target_select_for_type, context.getString(contentType.labelRes)),
                     color = TextMain, fontSize = titleSize, fontWeight = FontWeight.Bold)
 
                 // ── 스크롤 영역 (헤더와 하단 버튼을 제외한 전부) ──

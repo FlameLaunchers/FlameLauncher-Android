@@ -1,5 +1,6 @@
 package kr.co.donghyun.flamelauncher.presentation.util.maps
 
+import kr.co.donghyun.flamelauncher.R
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
@@ -49,7 +50,7 @@ object MapImporter {
             //    - "MyMap/level.dat" 처럼 한 겹 폴더에 있으면 prefix = "MyMap/" → saves/MyMap/ 으로 풂
             //    - 더 깊이("a/b/level.dat") 있으면 그 부모를 맵 루트로 사용
             val levelDatPath = findLevelDatPath(context, zipUri)
-                ?: return Result.Failure("zip 안에서 level.dat 를 찾지 못했습니다. 올바른 마인크래프트 맵 zip 인지 확인하세요.")
+                ?: return Result.Failure(context.getString(R.string.err_no_level_dat))
 
             val rootPrefix = levelDatPath.substringBeforeLast('/', "")
                 .let { if (it.isEmpty()) "" else "$it/" }
@@ -106,17 +107,17 @@ object MapImporter {
             if (!File(targetDir, "level.dat").exists()) {
                 // 정리하고 실패 처리
                 targetDir.deleteRecursively()
-                return Result.Failure("압축 해제 후 level.dat 가 확인되지 않았습니다.")
+                return Result.Failure(context.getString(R.string.err_level_dat_missing_after))
             }
 
             Log.i(TAG, "맵 가져오기 성공: ${targetDir.absolutePath} ($count files)")
             Result.Success(worldName = targetDir.name, fileCount = count)
         } catch (e: SecurityException) {
             Log.e(TAG, "맵 가져오기 보안 거부: ${e.message}", e)
-            Result.Failure("안전하지 않은 zip 으로 판단되어 중단했습니다.", e)
+            Result.Failure(context.getString(R.string.err_unsafe_zip), e)
         } catch (e: Exception) {
             Log.e(TAG, "맵 가져오기 실패: ${e.message}", e)
-            Result.Failure("맵 가져오기 중 오류가 발생했습니다: ${e.message}", e)
+            Result.Failure(context.getString(R.string.err_map_import_failed, e.message ?: ""), e)
         }
     }
 

@@ -2745,9 +2745,8 @@ class MinecraftActivity : org.libsdl.app.SDLActivity() {
                         Log.e("FLAME_LAUNCHER", "❌ Forge 구성 요소 생성 실패 — 게임 부팅 중단")
                         writeSyntheticCrashReport(
                             instanceBase,
-                            "Forge 구성 요소 생성 실패",
-                            Exception("빌더(:forgebuilder) 프로세스가 patched jar 생성에 실패했습니다. " +
-                                    "메모리 부족, 타임아웃, 또는 프로세서 실행 오류일 수 있습니다.")
+                            getString(R.string.crash_forge_build_failed_title),
+                            Exception(getString(R.string.crash_forge_build_failed_body))
                         )
                         runOnUiThread {
                             finish()
@@ -2887,7 +2886,7 @@ class MinecraftActivity : org.libsdl.app.SDLActivity() {
                 //   진행 못 한 초반 단계(빌더 실패, JVM 부팅 실패 등)에서 예외가 나면 사용자는
                 //   화면에 아무 피드백도 못 받고 그냥 멈춘 것처럼 보였다. 이제는 이런 "런처 레벨"
                 //   예외도 합성 크래시 리포트를 써서 CrashReportActivity 로 넘긴다.
-                writeSyntheticCrashReport(instanceBase, "Minecraft 실행 중 치명적 예외", e)
+                writeSyntheticCrashReport(instanceBase, getString(R.string.crash_launch_exception_title), e)
             } finally {
                 val crashDir = File(instanceBase, "crash-reports")
                 val files = crashDir.listFiles()
@@ -2936,13 +2935,11 @@ class MinecraftActivity : org.libsdl.app.SDLActivity() {
                 cause.printStackTrace(java.io.PrintWriter(sw))
             }.toString()
             file.writeText(
-                "---- FlameLauncher (런처 레벨) 오류 ----\n" +
+                getString(R.string.crash_report_header) + "\n" +
                 "Time: ${java.util.Date()}\n" +
                 "Description: $title\n\n" +
                 "$stackTrace\n\n" +
-                "-- 참고 --\n" +
-                "이 리포트는 Minecraft/Forge 자체가 만든 크래시 로그가 아니라,\n" +
-                "런처가 게임을 준비/실행하는 과정에서 잡은 예외를 기록한 것입니다.\n"
+                getString(R.string.crash_report_note) + "\n"
             )
             Log.d("FLAME_LAUNCHER", "📝 합성 크래시 리포트 작성: ${file.absolutePath}")
         } catch (e: Exception) {

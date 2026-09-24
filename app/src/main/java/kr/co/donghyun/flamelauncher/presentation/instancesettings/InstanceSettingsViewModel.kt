@@ -1,5 +1,6 @@
 package kr.co.donghyun.flamelauncher.presentation.instancesettings
 
+import kr.co.donghyun.flamelauncher.R
 import android.content.Context
 import android.net.Uri
 import androidx.lifecycle.ViewModel
@@ -92,34 +93,36 @@ class InstanceSettingsViewModel @Inject constructor(
     fun selectRenderer(id: String?): String {
         repository.setRendererId(instanceId, id)
         _rendererId.value = id
-        return id?.let { Renderer.fromId(it).displayName } ?: "전역 기본"
+        return id?.let { Renderer.fromId(it).displayName } ?: context.getString(R.string.global_default_label)
     }
 
     fun hasExportableMods(): Boolean = repository.hasExportableMods(instanceId)
 
     fun importMap(zipUri: Uri) {
-        _statusMessage.value = "맵을 가져오는 중…"
+        _statusMessage.value = context.getString(R.string.status_importing_map)
         _importing.value = true
         viewModelScope.launch(Dispatchers.IO) {
             val result = repository.importMap(instanceId, zipUri)
             _importing.value = false
             _resultEvents.send(when (result) {
-                is MapImporter.Result.Success -> "'${result.worldName}' 맵을 가져왔습니다 (${result.fileCount}개 파일)"
+                is MapImporter.Result.Success ->
+                    context.getString(R.string.status_map_imported, result.worldName, result.fileCount)
                 is MapImporter.Result.Failure -> result.reason
             })
         }
     }
 
     fun importMods(jarUris: List<Uri>) {
-        _statusMessage.value = "모드를 추가하는 중…"
+        _statusMessage.value = context.getString(R.string.status_adding_mods)
         _importing.value = true
         viewModelScope.launch(Dispatchers.IO) {
             val result = repository.importMods(instanceId, jarUris)
             _importing.value = false
             _resultEvents.send(when (result) {
                 is ModImporter.Result.Success -> buildString {
-                    append("모드 ${result.added.size}개 추가됨")
-                    if (result.skipped.isNotEmpty()) append(" · ${result.skipped.size}개 건너뜀")
+                    append(context.getString(R.string.status_mods_added, result.added.size))
+                    if (result.skipped.isNotEmpty())
+                        append(context.getString(R.string.status_mods_skipped, result.skipped.size))
                 }
                 is ModImporter.Result.Failure -> result.reason
             })
@@ -128,22 +131,20 @@ class InstanceSettingsViewModel @Inject constructor(
     }
 
     fun importModpack(zipUri: Uri) {
-        _statusMessage.value = "모드팩을 가져오는 중…"
+        _statusMessage.value = context.getString(R.string.status_importing_modpack)
         _importing.value = true
         viewModelScope.launch(Dispatchers.IO) {
             val result = repository.importModpack(instanceId, zipUri)
             _importing.value = false
             _resultEvents.send(when (result) {
                 is ModpackImporter.Result.Success -> buildString {
-                    append("모드 ${result.modCount}개")
-                    if (result.configCount > 0) append(" · 설정 ${result.configCount}개")
-                    append(" 가져옴")
+                    append(context.getString(R.string.status_modpack_imported, result.modCount, result.configCount))
                     if (result.failedDownloads > 0) {
-                        append("\n⚠️ ${result.failedDownloads}개 모드는 다운로드에 실패했어요(네트워크 상태를 확인하고 다시 시도해 주세요).")
+                        append(context.getString(R.string.status_modpack_failed_downloads, result.failedDownloads))
                     }
                     if (result.mcMismatch) {
                         val packMc = result.manifest?.mcVersion ?: "?"
-                        append("\n주의: 모드팩 버전($packMc)이 이 인스턴스와 달라 작동하지 않을 수 있어요.")
+                        append(context.getString(R.string.status_modpack_version_mismatch, packMc))
                     }
                 }
                 is ModpackImporter.Result.Failure -> result.reason
@@ -153,16 +154,14 @@ class InstanceSettingsViewModel @Inject constructor(
     }
 
     fun exportModpack(outputUri: Uri) {
-        _statusMessage.value = "모드팩으로 추출하는 중…"
+        _statusMessage.value = context.getString(R.string.status_exporting_modpack)
         _importing.value = true
         viewModelScope.launch(Dispatchers.IO) {
             val result = repository.exportModpack(instanceId, instanceName, outputUri)
             _importing.value = false
             _resultEvents.send(when (result) {
                 is ModpackExporter.Result.Success -> buildString {
-                    append("모드 ${result.modCount}개")
-                    if (result.configCount > 0) append(" · 설정 ${result.configCount}개")
-                    append("를 모드팩으로 추출했습니다.")
+                    append(context.getString(R.string.status_modpack_exported, result.modCount, result.configCount))
                 }
                 is ModpackExporter.Result.Failure -> result.reason
             })

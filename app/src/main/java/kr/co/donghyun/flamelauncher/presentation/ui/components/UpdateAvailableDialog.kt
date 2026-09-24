@@ -1,5 +1,7 @@
 package kr.co.donghyun.flamelauncher.presentation.ui.components
 
+import kr.co.donghyun.flamelauncher.R
+import androidx.compose.ui.res.stringResource
 import android.content.Intent
 import androidx.core.net.toUri
 import androidx.compose.foundation.clickable
@@ -85,7 +87,7 @@ fun UpdateAvailableDialog(
         title = {
             Column {
                 Text(
-                    "🔥 업데이트가 있습니다",
+                    stringResource(R.string.update_available_title),
                     color = TextMain,
                     fontWeight = FontWeight.Bold,
                     fontSize = if (tablet) 18.sp else if (compact) 14.sp else 16.sp,
@@ -120,7 +122,7 @@ fun UpdateAvailableDialog(
                         )
                     } else {
                         Text(
-                            "새로운 버전이 준비되었습니다.",
+                            stringResource(R.string.update_available_body),
                             color = TextSub,
                             fontSize = if (compact) 12.sp else 13.sp,
                         )
@@ -148,7 +150,7 @@ fun UpdateAvailableDialog(
                     )
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        "이 버전 건너뛰기",
+                        stringResource(R.string.skip_this_version),
                         color = TextSub,
                         fontSize = if (compact) 12.sp else 13.sp,
                     )
@@ -170,7 +172,7 @@ fun UpdateAvailableDialog(
                 if (skipThisVersion) onSkip() else onDownload()
             }) {
                 Text(
-                    "다운로드",
+                    stringResource(R.string.download_button),
                     color = Flame,
                     fontWeight = FontWeight.Bold,
                     fontSize = if (compact) 13.sp else 14.sp,
@@ -179,7 +181,7 @@ fun UpdateAvailableDialog(
         },
         dismissButton = {
             TextButton(onClick = closeAction) {
-                Text("닫기", color = TextSub, fontSize = if (compact) 13.sp else 14.sp)
+                Text(stringResource(R.string.close_button), color = TextSub, fontSize = if (compact) 13.sp else 14.sp)
             }
         },
     )

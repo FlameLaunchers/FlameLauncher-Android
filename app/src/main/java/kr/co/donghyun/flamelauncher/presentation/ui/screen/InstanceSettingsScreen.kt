@@ -1,5 +1,6 @@
 package kr.co.donghyun.flamelauncher.presentation.ui.screen
 
+import androidx.compose.ui.res.stringResource
 import kr.co.donghyun.flamelauncher.R
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.background
@@ -132,12 +133,12 @@ fun InstanceSettingsScreen(
             // ── 헤더 (상단 고정 — 스크롤되지 않음) ──
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                 TextButton(onClick = finish) {
-                    Text("뒤로", color = TextSecondary, fontSize = if (tablet) 14.sp else 11.sp)
+                    Text(stringResource(R.string.back_button), color = TextSecondary, fontSize = if (tablet) 14.sp else 11.sp)
                 }
 
                 Spacer(Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f, fill = false)) {
-                    Text("인스턴스 설정", color = TextPrimary, fontSize = if (compact) 13.sp else 16.sp, fontWeight = FontWeight.Bold,
+                    Text(stringResource(R.string.instance_settings_title), color = TextPrimary, fontSize = if (compact) 13.sp else 16.sp, fontWeight = FontWeight.Bold,
                         maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(instanceName, color = TextSecondary, fontSize = if (compact) 10.sp else 12.sp,
                         maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -153,19 +154,19 @@ fun InstanceSettingsScreen(
                     .verticalScroll(rememberScrollState())
             ) {
                 // ── 그래픽 ──
-                SectionLabel("그래픽")
+                SectionLabel(stringResource(R.string.section_graphics))
                 Spacer(Modifier.height(8.dp))
 
                 // 렌더러 — 인스턴스별 설정. 탭하면 선택 다이얼로그.
                 val localContext = LocalContext.current
                 val rendererLabel = rendererDisplayLabel(currentRendererId, localContext)
                 val rendererSub = when {
-                    currentRendererId == null -> "전역 기본값 사용 · 탭하여 이 인스턴스 전용으로 변경"
-                    else -> "이 인스턴스 전용 렌더러"
+                    currentRendererId == null -> stringResource(R.string.renderer_uses_global)
+                    else -> stringResource(R.string.renderer_instance_only)
                 }
                 SettingRow(
                     emoji = rendererEmoji(currentRendererId),
-                    title = "렌더러 · $rendererLabel",
+                    title = stringResource(R.string.renderer_row_title, rendererLabel),
                     subtitle = rendererSub,
                     enabled = !isImporting,
                 ) { showRendererPicker = true }
@@ -173,30 +174,30 @@ fun InstanceSettingsScreen(
                 Spacer(Modifier.height(20.dp))
 
                 // ── 콘텐츠 추가 ──
-                SectionLabel("콘텐츠 추가")
+                SectionLabel(stringResource(R.string.section_add_content))
                 Spacer(Modifier.height(8.dp))
 
                 // 모드(.jar) 추가 — 로더가 깔린 인스턴스에서만 활성
                 SettingRow(
                     emoji = "🧩",
-                    title = "모드 추가 (.jar)",
+                    title = stringResource(R.string.add_mod_title),
                     subtitle = if (loaderInstalled)
-                        "${loaderLabel ?: "로더"} · .jar 모드 파일을 mods 에 추가"
+                        stringResource(R.string.add_mod_subtitle, loaderLabel ?: stringResource(R.string.loader_label))
                     else
-                        "Forge / Fabric / NeoForge 설치 시 사용 가능",
+                        stringResource(R.string.needs_loader),
                     enabled = !isImporting && loaderInstalled,
                 ) { onLaunchModPicker() }
 
                 Spacer(Modifier.height(10.dp))
 
                 // 설치된 모드 관리 — 개별 삭제. mods/ 가 있는(로더 설치된) 인스턴스에서만.
-                val modCountLabel = if (installedMods.isEmpty()) "설치된 모드 없음"
-                    else "총 ${installedMods.size}개 · 탭하여 개별 삭제"
+                val modCountLabel = if (installedMods.isEmpty()) stringResource(R.string.no_mods_installed)
+                    else stringResource(R.string.installed_mods_count, installedMods.size)
                 SettingRow(
                     emoji = "🗂",
-                    title = "설치된 모드 관리",
+                    title = stringResource(R.string.manage_mods_title),
                     subtitle = if (loaderInstalled) modCountLabel
-                    else "Forge / Fabric / NeoForge 설치 시 사용 가능",
+                    else stringResource(R.string.needs_loader),
                     enabled = !isImporting && loaderInstalled,
                 ) {
                     refreshMods()           // 다이얼로그 열기 직전 최신 목록으로 갱신
@@ -208,22 +209,22 @@ fun InstanceSettingsScreen(
                 // 월드(맵) 가져오기 — 기존
                 SettingRow(
                     emoji = "🗺",
-                    title = "월드(맵) 가져오기",
-                    subtitle = "zip 으로 받은 월드를 saves 에 추가",
+                    title = stringResource(R.string.import_world_title),
+                    subtitle = stringResource(R.string.import_world_subtitle),
                     enabled = !isImporting,
                 ) { onLaunchMapPicker() }
 
                 Spacer(Modifier.height(20.dp))
 
                 // ── 모드팩 ──
-                SectionLabel("모드팩")
+                SectionLabel(stringResource(R.string.section_modpack))
                 Spacer(Modifier.height(8.dp))
 
                 // 모드팩 가져오기 — zip 의 mods/config 를 현재 인스턴스에 풀어넣음
                 SettingRow(
                     emoji = "📥",
-                    title = "모드팩 가져오기",
-                    subtitle = "모드팩(zip)의 모드·설정을 이 인스턴스에 추가합니다",
+                    title = stringResource(R.string.import_modpack_title),
+                    subtitle = stringResource(R.string.import_modpack_subtitle),
                     enabled = !isImporting,
                 ) { onImportModpack() }
 
@@ -232,8 +233,8 @@ fun InstanceSettingsScreen(
                 // 모드팩으로 추출 — 현재 mods/config 를 manifest 와 함께 zip 으로 저장
                 SettingRow(
                     emoji = "📦",
-                    title = "모드팩으로 추출",
-                    subtitle = "현재 mods·config 를 모드팩(zip)으로 내보냅니다",
+                    title = stringResource(R.string.export_modpack_title),
+                    subtitle = stringResource(R.string.export_modpack_subtitle),
                     enabled = !isImporting,
                 ) { onExportModpack() }
 
@@ -241,13 +242,13 @@ fun InstanceSettingsScreen(
                 Spacer(Modifier.height(20.dp))
 
                 // ── 관리 ──
-                SectionLabel("관리")
+                SectionLabel(stringResource(R.string.section_manage))
                 Spacer(Modifier.height(8.dp))
 
                 SettingRow(
                     emoji = "🗑",
-                    title = "인스턴스 삭제",
-                    subtitle = "이 인스턴스와 모든 데이터를 삭제합니다",
+                    title = stringResource(R.string.delete_instance_title),
+                    subtitle = stringResource(R.string.delete_instance_subtitle),
                     enabled = !isImporting,
                     danger = true,
                 ) { showDeleteConfirm = true }
@@ -314,10 +315,10 @@ fun InstanceSettingsScreen(
             AlertDialog(
                 onDismissRequest = { showDeleteConfirm = false },
                 containerColor = BgSurface,
-                title = { Text("인스턴스 삭제", color = TextPrimary) },
+                title = { Text(stringResource(R.string.delete_instance_title), color = TextPrimary) },
                 text = {
                     Text(
-                        "‘$instanceName’ 인스턴스를 삭제할까요?\n저장된 월드, 설정, 모드가 모두 사라집니다.",
+                        stringResource(R.string.delete_instance_confirm, instanceName),
                         color = TextSecondary,
                     )
                 },
@@ -325,11 +326,11 @@ fun InstanceSettingsScreen(
                     TextButton(onClick = {
                         showDeleteConfirm = false
                         onDeleteInstance()
-                    }) { Text("삭제", color = Color(0xFFE5484D)) }
+                    }) { Text(stringResource(R.string.delete_button), color = Color(0xFFE5484D)) }
                 },
                 dismissButton = {
                     TextButton(onClick = { showDeleteConfirm = false }) {
-                        Text("취소", color = TextSecondary)
+                        Text(stringResource(R.string.cancel_button), color = TextSecondary)
                     }
                 },
             )
@@ -568,7 +569,7 @@ private fun RendererPickerDialog(
                     RendererOption(
                         emoji = r.emoji,
                         title = r.displayName,
-                        desc = r.description,
+                        desc = stringResource(r.descriptionRes),
                         selected = currentRendererId == r.id,
                         enabled = true,
                         onClick = { onSelect(r.id) },
@@ -576,7 +577,7 @@ private fun RendererPickerDialog(
                     if (r.id == "vulkan_zink") {
                         Spacer(Modifier.height(6.dp))
                         TextButton(onClick = onManageCustomDriver) {
-                            Text("🧩 커스텀 Vulkan 드라이버(Turnip 등) 관리", color = FlamePrimary, fontSize = 12.sp)
+                            Text(stringResource(R.string.manage_custom_vulkan_driver), color = FlamePrimary, fontSize = 12.sp)
                         }
                     }
                     Spacer(Modifier.height(8.dp))

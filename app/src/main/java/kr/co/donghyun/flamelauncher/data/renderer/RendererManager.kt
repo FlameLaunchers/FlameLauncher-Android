@@ -1,11 +1,12 @@
 package kr.co.donghyun.flamelauncher.data.renderer
 
+import kr.co.donghyun.flamelauncher.R
 import android.content.Context
 
 enum class Renderer(
     val id: String,
     val displayName: String,
-    val description: String,
+    @androidx.annotation.StringRes val descriptionRes: Int,
     val pojavRenderer: String,
     val libglName: String,
     val libglString: String,
@@ -17,8 +18,7 @@ enum class Renderer(
     ZINK(
         id = "zink",
         displayName = "Zink (Vulkan)",
-        description = "Vulkan을 OpenGL로 변환. 모던 GPU에서 가장 호환성 좋음. 1.17+ 추천. " +
-                "내부적으로 Vulkan Zink → Freedreno/Panfrost(벤더별) → 실패 시 GL4ES 순으로 자동 폴백.",
+        descriptionRes = R.string.renderer_desc_zink,
         pojavRenderer = "vulkan_zink",
         libglName = "libOSMesa.so",
         libglString = "VulkanGL",
@@ -49,7 +49,7 @@ enum class Renderer(
     GL4ES(
         id = "gl4es",
         displayName = "GL4ES",
-        description = "OpenGL을 GLES2로 변환. 구버전(1.12 이하) 및 Zink 미지원 기기용.",
+        descriptionRes = R.string.renderer_desc_gl4es,
         pojavRenderer = "opengles2",
         libglName = "libgl4es_114.so",
         libglString = "GL4ES wrapper",
@@ -84,7 +84,7 @@ enum class Renderer(
     MOBILEGLUES(
         id = "mobileglues",
         displayName = "MobileGlues",
-        description = "OpenGL을 GLES3.2로 변환. 셰이더/모던 버전에 최적.",
+        descriptionRes = R.string.renderer_desc_mobileglues,
         pojavRenderer = "opengles3",
         libglName = "libmobileglues.so",
         libglString = "MobileGlues",
@@ -110,7 +110,7 @@ enum class Renderer(
     KRYPTON(
         id = "krypton",
         displayName = "Krypton Wrapper",
-        description = "GL4ES 기반 고급 래퍼(NG-GL4ES). 셰이더/폭넓은 버전 지원. 내장 렌더러.",
+        descriptionRes = R.string.renderer_desc_krypton,
         pojavRenderer = "opengles3",
         libglName = "libng_gl4es.so",
         libglString = "Krypton Wrapper",

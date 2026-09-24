@@ -1,5 +1,6 @@
 package kr.co.donghyun.flamelauncher.presentation.ui.screen
 
+import androidx.compose.ui.res.stringResource
 import kr.co.donghyun.flamelauncher.R
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.background
@@ -162,7 +163,7 @@ fun SettingsScreen(
                     GlobalRendererOption(
                         emoji = r.emoji,
                         title = r.displayName,
-                        desc = r.description,
+                        desc = stringResource(r.descriptionRes),
                         selected = globalRenderer.id == r.id,
                         tablet = tablet,
                         onClick = { onGlobalRendererChange(r) },

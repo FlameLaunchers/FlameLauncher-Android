@@ -1,5 +1,7 @@
 package kr.co.donghyun.flamelauncher.presentation.util.mods
 
+import android.content.Context
+import kr.co.donghyun.flamelauncher.R
 import android.util.Log
 import com.google.gson.Gson
 import kotlinx.coroutines.Dispatchers
@@ -45,6 +47,7 @@ import kotlin.text.get
  *     설치 전체를 실패 처리(무엇이 빠졌는지 조용히 넘어가지 않음).
  */
 class MrpackInstaller(
+    private val context: Context,
     private val baseDir: File,
     private val modrinthApi: ModrinthAPI,
     private val onProgress: (DownloadProgress) -> Unit,
@@ -107,7 +110,7 @@ class MrpackInstaller(
         Log.d("FLAME_LAUNCHER", "📦 .mrpack ${index.name} v${index.versionId}, MC=$mcVersion, loader=$loaderType $loaderVersion")
 
         // 3) overrides 추출 (overrides/, client-overrides/ 둘 다)
-        onProgress(DownloadProgress(phase = DownloadPhase.DOWNLOADING_LIBRARIES, fileName = "파일 추출 중..."))
+        onProgress(DownloadProgress(phase = DownloadPhase.DOWNLOADING_LIBRARIES, fileName = context.getString(R.string.progress_extracting_files)))
         extractOverrides(mrpackZip, gameDir, "overrides")
         extractOverrides(mrpackZip, gameDir, "client-overrides")
 
@@ -166,7 +169,7 @@ class MrpackInstaller(
                             onProgress(DownloadProgress(
                                 phase = DownloadPhase.DOWNLOADING_ASSETS,
                                 current = done, total = firstPassFailures.size,
-                                fileName = "재시도: ${f.path.substringAfterLast('/')}"
+                                fileName = context.getString(R.string.progress_retrying_file, f.path.substringAfterLast('/'))
                             ))
                         }
                     }

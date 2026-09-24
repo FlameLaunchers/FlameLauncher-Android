@@ -1,5 +1,6 @@
 package kr.co.donghyun.flamelauncher.presentation.util.mods
 
+import kr.co.donghyun.flamelauncher.R
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
@@ -25,9 +26,9 @@ object ModImporter {
     }
 
     fun importJars(context: Context, uris: List<Uri>, modsDir: File): Result {
-        if (uris.isEmpty()) return Result.Failure("선택된 파일이 없습니다.")
+        if (uris.isEmpty()) return Result.Failure(context.getString(R.string.err_no_files_selected))
         if (!modsDir.exists() && !modsDir.mkdirs()) {
-            return Result.Failure("mods 폴더를 만들 수 없습니다: ${modsDir.absolutePath}")
+            return Result.Failure(context.getString(R.string.err_cannot_make_mods_dir, modsDir.absolutePath))
         }
 
         val added = ArrayList<String>()
@@ -44,28 +45,29 @@ object ModImporter {
                             head[0] == 'P'.code.toByte() && head[1] == 'K'.code.toByte()
                 } ?: false
                 if (!looksLikeZip) {
-                    skipped.add("$safeName (jar/zip 형식이 아님)")
+                    skipped.add(context.getString(R.string.skip_not_a_jar, safeName))
                     continue
                 }
 
                 val dest = File(modsDir, safeName)
                 val input = context.contentResolver.openInputStream(uri)
                 if (input == null) {
-                    skipped.add("$safeName (파일을 열 수 없음)")
+                    skipped.add(context.getString(R.string.skip_cannot_open, safeName))
                     continue
                 }
                 input.use { FileOutputStream(dest).use { out -> it.copyTo(out) } }
 
                 if (dest.exists() && dest.length() > 0) added.add(safeName)
-                else skipped.add("$safeName (복사 실패)")
+                else skipped.add(context.getString(R.string.skip_copy_failed, safeName))
             } catch (e: Exception) {
                 Log.e("FLAME_LAUNCHER", "모드 복사 실패: $safeName", e)
-                skipped.add("$safeName (${e.message ?: "오류"})")
+                skipped.add(context.getString(R.string.skip_with_reason, safeName,
+                    e.message ?: context.getString(R.string.error_label)))
             }
         }
 
         return if (added.isEmpty() && skipped.isNotEmpty())
-            Result.Failure("추가된 모드가 없습니다.\n" + skipped.joinToString("\n"))
+            Result.Failure(context.getString(R.string.err_no_mods_added) + "\n" + skipped.joinToString("\n"))
         else
             Result.Success(added, skipped)
     }

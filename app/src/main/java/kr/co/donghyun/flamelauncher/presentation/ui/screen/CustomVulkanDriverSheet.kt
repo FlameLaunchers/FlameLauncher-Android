@@ -1,5 +1,7 @@
 package kr.co.donghyun.flamelauncher.presentation.ui.screen
 
+import kr.co.donghyun.flamelauncher.R
+import androidx.compose.ui.res.stringResource
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -71,7 +73,7 @@ fun CustomVulkanDriverSheet(onDismiss: () -> Unit) {
             }
             importing = false
             if (result == null) {
-                errorMsg = "가져오기 실패 — zip 안에 meta.json 이 없거나 형식이 안 맞아요."
+                errorMsg = context.getString(R.string.driver_import_failed)
             } else {
                 drivers = CustomVulkanDriverManager.listDrivers(context)
             }
@@ -85,22 +87,20 @@ fun CustomVulkanDriverSheet(onDismiss: () -> Unit) {
     ) {
         Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp)) {
             Text(
-                "🧩 커스텀 Vulkan 드라이버",
+                stringResource(R.string.custom_vulkan_driver_title),
                 color = TextPrimary, fontSize = 17.sp, fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(top = 8.dp),
             )
             Text(
-                "Turnip 등 표준 포맷(zip 안에 .so + meta.json) 드라이버를 가져와서 Zink 렌더러에 적용해요. " +
-                    "신뢰할 수 있는 곳(Mesa 공식, K11MCH1/AdrenoToolsDrivers 등)에서 받은 파일만 사용하세요. " +
-                    "안 맞는 드라이버는 크래시를 일으킬 수 있어요 — 그럴 땐 아래에서 \"시스템 기본\"으로 되돌리면 돼요.",
+                stringResource(R.string.custom_vulkan_driver_desc),
                 color = TextSecondary, fontSize = 11.sp, lineHeight = 15.sp,
                 modifier = Modifier.padding(top = 4.dp, bottom = 14.dp),
             )
 
             // 시스템 기본(커스텀 드라이버 안 씀)
             DriverRow(
-                title = "시스템 기본 드라이버",
-                subtitle = "이 기기의 기본 Vulkan 드라이버를 그대로 사용",
+                title = stringResource(R.string.system_default_driver),
+                subtitle = stringResource(R.string.system_default_driver_desc),
                 selected = activeId == null,
                 onClick = {
                     CustomVulkanDriverManager.setActiveDriverId(context, null)
@@ -138,11 +138,11 @@ fun CustomVulkanDriverSheet(onDismiss: () -> Unit) {
                     CircularProgressIndicator(color = Flame, modifier = Modifier.height(24.dp))
                 } else {
                     TextButton(onClick = { zipPicker.launch(arrayOf("application/zip", "application/octet-stream", "*/*")) }) {
-                        Text("📦 드라이버 zip 가져오기", color = Flame, fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.import_driver_zip), color = Flame, fontWeight = FontWeight.Bold)
                     }
                 }
                 TextButton(onClick = onDismiss) {
-                    Text("닫기", color = TextSecondary)
+                    Text(stringResource(R.string.close_button), color = TextSecondary)
                 }
             }
             Spacer(Modifier.height(12.dp))
@@ -173,7 +173,7 @@ private fun DriverRow(
         }
         if (onDelete != null) {
             TextButton(onClick = onDelete) {
-                Text("삭제", color = Color(0xFFE5484D))
+                Text(stringResource(R.string.delete_button), color = Color(0xFFE5484D))
             }
         }
     }

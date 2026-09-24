@@ -1,5 +1,7 @@
 package kr.co.donghyun.flamelauncher.presentation.util.mods
 
+import android.content.Context
+import kr.co.donghyun.flamelauncher.R
 import android.util.Log
 import com.google.gson.Gson
 import kotlinx.coroutines.Dispatchers
@@ -40,6 +42,7 @@ data class ModPackInstallResult(
  *     설치 전체를 실패 처리(무엇이 빠졌는지 조용히 넘어가지 않음).
  */
 class ModPackInstaller(
+    private val context: Context,
     private val baseDir: File,
     private val curseForgeApi: CurseForgeAPI,
     private val onProgress: (DownloadProgress) -> Unit
@@ -120,7 +123,7 @@ class ModPackInstaller(
         val (loaderType, loaderVersion) = parseLoaderId(loaderEntry?.id ?: "")
 
         // overrides 추출
-        onProgress(DownloadProgress(phase = DownloadPhase.DOWNLOADING_LIBRARIES, fileName = "파일 추출 중..."))
+        onProgress(DownloadProgress(phase = DownloadPhase.DOWNLOADING_LIBRARIES, fileName = context.getString(R.string.progress_extracting_files)))
         extractOverrides(modpackZip, gameDir, manifest.overrides)
 
         // 모드 다운로드
@@ -181,7 +184,7 @@ class ModPackInstaller(
                         onProgress(DownloadProgress(
                             phase = DownloadPhase.DOWNLOADING_ASSETS,
                             current = done, total = totalMods,
-                            fileName = "모드 다운로드 중..."
+                            fileName = context.getString(R.string.progress_downloading_mods)
                         ))
                     }
                 }
@@ -203,7 +206,7 @@ class ModPackInstaller(
                             onProgress(DownloadProgress(
                                 phase = DownloadPhase.DOWNLOADING_ASSETS,
                                 current = done, total = firstPassFailures.size,
-                                fileName = "모드 재시도 중..."
+                                fileName = context.getString(R.string.progress_retrying_mods)
                             ))
                         }
                     }
