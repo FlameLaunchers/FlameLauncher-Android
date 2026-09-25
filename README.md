@@ -82,7 +82,7 @@ Mojang's own servers with your own account.
 
 ### 2-1. Install
 
-1. Grab the latest APK from [Releases](https://github.com/FlameLaunchers/FlameLauncher-Android/releases)
+1. Grab the latest APK from [Releases](https://github.com/FlameLaunchers/FlameLauncher/releases)
 2. Android asks you to allow installs from unknown sources — allow it
 3. Grant storage permission on first launch
 
