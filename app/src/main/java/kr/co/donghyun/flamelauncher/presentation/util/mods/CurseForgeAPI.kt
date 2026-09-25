@@ -1,10 +1,10 @@
 package kr.co.donghyun.flamelauncher.presentation.util.mods
 
+import kr.co.donghyun.flamelauncher.data.api.CurseForgeKey
 import android.util.Log
 import com.google.gson.Gson
 import com.google.gson.JsonParser
 import com.google.gson.reflect.TypeToken
-import kr.co.donghyun.flamelauncher.BuildConfig
 import kr.co.donghyun.flamelauncher.data.mods.*
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
@@ -15,7 +15,7 @@ class CurseForgeAPI {
     private val client = OkHttpClient()
     private val gson = Gson()
     private val baseUrl = "https://api.curseforge.com/v1"
-    private val apiKey = BuildConfig.CURSEFORGE_API_KEY
+    private val apiKey = CurseForgeKey.value
 
     // Minecraft Java Edition game ID
     private val MINECRAFT_GAME_ID = 432

@@ -1,11 +1,11 @@
 package kr.co.donghyun.flamelauncher.data.repository
 
+import kr.co.donghyun.flamelauncher.data.api.CurseForgeKey
 import android.content.Context
 import android.util.Log
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kr.co.donghyun.flamelauncher.BuildConfig
 import kr.co.donghyun.flamelauncher.data.instance.InstanceManager
 import kr.co.donghyun.flamelauncher.data.mods.ContentItem
 import kr.co.donghyun.flamelauncher.data.mods.CurseForgeListResponse
@@ -55,7 +55,7 @@ class ContentRepositoryImpl @Inject constructor(
 
         val request = Request.Builder()
             .url(urlBuilder.toString())
-            .header("x-api-key", BuildConfig.CURSEFORGE_API_KEY)
+            .header("x-api-key", CurseForgeKey.value)
             .header("Accept", "application/json")
             .build()
 

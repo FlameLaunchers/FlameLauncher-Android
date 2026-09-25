@@ -1,5 +1,6 @@
 package kr.co.donghyun.flamelauncher.data.repository
 
+import kr.co.donghyun.flamelauncher.data.api.CurseForgeKey
 import android.content.Context
 import kr.co.donghyun.flamelauncher.R
 import android.util.Log
@@ -13,7 +14,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
-import kr.co.donghyun.flamelauncher.BuildConfig
 import kr.co.donghyun.flamelauncher.data.auth.MicrosoftAuthManager
 import kr.co.donghyun.flamelauncher.data.instance.InstanceManager
 import kr.co.donghyun.flamelauncher.data.instance.InstanceMeta
@@ -1687,7 +1687,7 @@ class ContentInstallRepositoryImpl @Inject constructor(
     private fun fetchFileById(modId: Int, fileId: Int): CurseForgeFile? {
         val request = Request.Builder()
             .url("https://api.curseforge.com/v1/mods/$modId/files/$fileId")
-            .header("x-api-key", BuildConfig.CURSEFORGE_API_KEY)
+            .header("x-api-key", CurseForgeKey.value)
             .header("Accept", "application/json")
             .build()
         return runCatching {
@@ -1721,7 +1721,7 @@ class ContentInstallRepositoryImpl @Inject constructor(
 
         val request = Request.Builder()
             .url(url.toString())
-            .header("x-api-key", BuildConfig.CURSEFORGE_API_KEY)
+            .header("x-api-key", CurseForgeKey.value)
             .header("Accept", "application/json")
             .build()
 
@@ -1763,7 +1763,7 @@ class ContentInstallRepositoryImpl @Inject constructor(
     private fun fetchModInfo(modId: Int): CurseForgeMod? {
         val request = Request.Builder()
             .url("https://api.curseforge.com/v1/mods/$modId")
-            .header("x-api-key", BuildConfig.CURSEFORGE_API_KEY)
+            .header("x-api-key", CurseForgeKey.value)
             .header("Accept", "application/json")
             .build()
         return runCatching {

@@ -64,3 +64,6 @@ local.gradle
 
 # 서명 재료 — 환경변수(CI) 또는 이 파일(로컬)로 주입한다. 절대 커밋하지 않는다.
 keystore.properties
+
+# 암호화 열쇠 — 절대 올리지 않는다
+.secrets/

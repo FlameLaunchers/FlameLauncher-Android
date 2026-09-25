@@ -1,12 +1,12 @@
 package kr.co.donghyun.flamelauncher.data.repository
 
+import kr.co.donghyun.flamelauncher.data.api.CurseForgeKey
 import android.content.Context
 import android.util.Log
 import com.google.gson.Gson
 import com.google.gson.JsonParser
 import com.google.gson.reflect.TypeToken
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kr.co.donghyun.flamelauncher.BuildConfig
 import kr.co.donghyun.flamelauncher.data.instance.InstanceManager
 import kr.co.donghyun.flamelauncher.data.jvm.isLegacyVersion
 import kr.co.donghyun.flamelauncher.data.mods.ContentSource
@@ -83,7 +83,7 @@ class ContentDetailRepositoryImpl @Inject constructor(
         val client = OkHttpClient()
         val req = Request.Builder()
             .url("https://api.curseforge.com/v1/mods/$modId/files?pageSize=50&index=0")
-            .header("x-api-key", BuildConfig.CURSEFORGE_API_KEY)
+            .header("x-api-key", CurseForgeKey.value)
             .header("Accept", "application/json")
             .build()
         return try {
@@ -236,7 +236,7 @@ class ContentDetailRepositoryImpl @Inject constructor(
 
     fun fetchModDetail(modId: Int): ContentDetail {
         val client = OkHttpClient()
-        val apiKey = BuildConfig.CURSEFORGE_API_KEY
+        val apiKey = CurseForgeKey.value
         var screenshots = listOf<ContentScreenshot>()
         var description = ""
         var rawHtmlWebView = ""

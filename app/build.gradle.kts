@@ -1,4 +1,8 @@
+import java.security.MessageDigest
+import java.security.SecureRandom
+import java.util.Base64
 import java.util.Properties
+import java.util.UUID
 
 plugins {
     alias(libs.plugins.android.application)
@@ -39,7 +43,35 @@ android {
                 ?.getProperty("CURSEFORGE_API_KEY")
             ?: ""
 
-        buildConfigField("String", "CURSEFORGE_API_KEY", "\"$curseforgeApiKey\"")
+        // ⚠️ 평문 키를 그대로 넣으면 APK 에 문자열로 남아 `strings` 한 방에 나온다.
+        //    AES-256-CBC 로 감싸서 암호문만 넣는다. 열쇠는 SHA-256(암호구절)이고,
+        //    암호구절은 저장소 밖(.secrets/curseforge.pass)에 둔다 — 없으면 이번 빌드용으로
+        //    무작위 생성한다(CI 는 이 경로를 쓴다. 빌드마다 암호문이 달라도 상관없다).
+        //
+        //    ⚠️ 이건 **난독화**지 보안이 아니다. 복호화에 필요한 게 전부 앱 안에 들어가므로
+        //       바이너리를 뜯으면 결국 나온다. 목적은 소스·저장소·문자열 덤프에서 없애는 것.
+        val encPass = System.getenv("CURSEFORGE_KEY_PASS")
+            ?: rootProject.file("../.secrets/curseforge.pass").takeIf { it.exists() }?.readText()?.trim()
+            ?: UUID.randomUUID().toString()
+        // ⚠️ KTS 안에서는 javax.crypto.spec 임포트가 해석되지 않는다(스크립트 컴파일 클래스패스).
+        //    암호화만 openssl 로 돌린다 — macOS·러너 둘 다 기본으로 있다. 복호화는 앱에서 한다.
+        val encIv = ByteArray(16).also { SecureRandom().nextBytes(it) }
+        val encIvHex = encIv.joinToString("") { "%02x".format(it) }
+        val encKeyHex = MessageDigest.getInstance("SHA-256")
+            .digest(encPass.toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it) }
+        val encCipherText = if (curseforgeApiKey.isEmpty()) "" else
+            providers.exec {
+                commandLine("bash", "-c",
+                    "printf %s \"\$FLAME_PLAIN_KEY\" | " +
+                        "openssl enc -aes-256-cbc -K $encKeyHex -iv $encIvHex -base64 -A")
+                environment("FLAME_PLAIN_KEY", curseforgeApiKey)
+            }.standardOutput.asText.get().trim()
+        buildConfigField("String", "CURSEFORGE_KEY_CIPHER", "\"$encCipherText\"")
+        buildConfigField("String", "CURSEFORGE_KEY_IV",
+            "\"${Base64.getEncoder().encodeToString(encIv)}\"")
+        buildConfigField("String", "CURSEFORGE_KEY_PASS",
+            "\"${Base64.getEncoder().encodeToString(encPass.toByteArray(Charsets.UTF_8))}\"")
 
         // ── ABI는 MinecraftActivity가 arm64-v8a만 추출하므로 단일 ABI ──
         ndk {
@@ -104,6 +136,11 @@ android {
                 keyPassword = keyPasswordValue
             }
         }
+    }
+
+    testOptions {
+        // 유닛 테스트에서 android.util.Log 같은 스텁이 예외를 던지지 않게 한다.
+        unitTests.isReturnDefaultValues = true
     }
 
     buildTypes {
