@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Flame Launcher</string>
+    <string name="app_name">FlameLauncher</string>
 
     <string name="terracotta">Multiplayer</string>
     <string name="terracotta_metadata_ver">Terracotta version: %s</string>

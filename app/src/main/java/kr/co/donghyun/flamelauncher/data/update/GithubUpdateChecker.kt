@@ -12,7 +12,7 @@ import java.util.concurrent.TimeUnit
 /**
  * GitHub 릴리스 기반 자동 업데이트 감지.
  *
- * FlameLaunchers/FlameLauncher 저장소의 최신 릴리스를 조회해, 현재 앱 버전(BuildConfig.VERSION_NAME)
+ * FlameLaunchers/FlameLauncher-Android 저장소의 최신 릴리스를 조회해, 현재 앱 버전(BuildConfig.VERSION_NAME)
  * 보다 새 버전이 올라오면 [GithubRelease] 를 돌려준다. (프리릴리스/베타도 포함해서 감지)
  */
 data class GithubRelease(
@@ -29,7 +29,7 @@ object GithubUpdateChecker {
     // ⚠️ 릴리스를 올리는 저장소와 반드시 같아야 한다. 예전 주소(bucket-0224/FlameLauncher)는
     //    존재하지 않는 저장소라 업데이트 안내가 한 번도 뜨지 않았다(404 를 조용히 삼킨다).
     private const val RELEASES_URL =
-        "https://api.github.com/repos/FlameLaunchers/FlameLauncher/releases?per_page=10"
+        "https://api.github.com/repos/FlameLaunchers/FlameLauncher-Android/releases?per_page=10"
 
     // GitHub API 는 User-Agent 헤더가 없는 요청을 403 으로 거부한다(문서화된 요구사항).
     // ModrinthAPI 와 동일한 컨벤션의 식별 가능한 UA 를 붙인다.
