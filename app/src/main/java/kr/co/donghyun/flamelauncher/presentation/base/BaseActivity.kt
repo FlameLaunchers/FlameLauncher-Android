@@ -10,6 +10,11 @@ import androidx.core.view.WindowInsetsControllerCompat
 import java.io.File
 
 abstract class BaseActivity : ComponentActivity() {
+    /** 설정에서 고른 언어를 화면이 만들어지기 전에 적용한다(AppLocale 참고). */
+    override fun attachBaseContext(newBase: android.content.Context) {
+        super.attachBaseContext(kr.co.donghyun.flamelauncher.data.settings.AppLocale.wrap(newBase))
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         // [수정] super.onCreate 이전에 화면 방향을 미리 가로로 고정합니다.
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE

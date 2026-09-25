@@ -127,6 +127,11 @@ class MinecraftActivity : org.libsdl.app.SDLActivity() {
             override fun onTouch(v: View, event: MotionEvent): Boolean = flameTouch.onTouch(v, event)
         }
 
+    /** 설정에서 고른 언어를 화면이 만들어지기 전에 적용한다(AppLocale 참고). */
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(kr.co.donghyun.flamelauncher.data.settings.AppLocale.wrap(newBase))
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         // super 보다 먼저 고정한다 — 뒤에 하면 SDL 이 만든 창이 한 번 세로로 잡혔다 돈다.
         requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE

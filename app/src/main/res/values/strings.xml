@@ -509,4 +509,7 @@
     <string name="progress_downloading_mods">Downloading mods…</string>
     <string name="progress_retrying_mods">Retrying mods…</string>
     <string name="progress_retrying_file">Retrying: %1$s</string>
+    <string name="language_section_title">Language</string>
+    <string name="language_section_desc">Pick the language the app shows. It applies right away.</string>
+    <string name="language_system">System language</string>
 </resources>

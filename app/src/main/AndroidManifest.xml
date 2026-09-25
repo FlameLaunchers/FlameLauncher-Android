@@ -34,6 +34,7 @@
     </queries>
 
     <application
+        android:localeConfig="@xml/locales_config"
         android:name=".FlameLauncherApplication"
         android:allowBackup="true"
         android:allowNativeHeapPointerTagging="false"

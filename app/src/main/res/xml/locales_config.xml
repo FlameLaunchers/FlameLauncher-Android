@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 앱이 지원하는 언어. 안드로이드 13+ 는 이 목록을 보고 시스템 설정의
+     "앱별 언어" 항목을 띄운다. 앱 안 설정(설정 → 언어)과 같은 값을 쓴다. -->
+<locale-config xmlns:android="http://schemas.android.com/apk/res/android">
+    <locale android:name="en" />
+    <locale android:name="ko" />
+</locale-config>

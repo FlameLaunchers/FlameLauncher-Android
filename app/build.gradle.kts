@@ -25,8 +25,8 @@ android {
         // ⚠ GitHub 릴리스 태그를 새로 찍기 전에 반드시 이 두 값을 함께 올릴 것.
         //    (앱 내 자동 업데이트 팝업이 BuildConfig.VERSION_NAME 을 최신 태그와 비교하므로,
         //     안 올리면 최신 버전 사용자도 계속 "업데이트" 안내를 받게 됨)
-        versionCode = 4
-        versionName = "2.3.0"
+        versionCode = 5
+        versionName = "2.4.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 

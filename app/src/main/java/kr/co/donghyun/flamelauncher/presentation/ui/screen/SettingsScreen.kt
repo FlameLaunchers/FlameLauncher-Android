@@ -135,6 +135,49 @@ fun SettingsScreen(
                 .padding(if (tablet) 20.dp else 12.dp),
             verticalArrangement = Arrangement.spacedBy(if (tablet) 16.dp else 10.dp)
         ) {
+            // 언어 섹션 — 시스템 언어를 따르거나 영어·한국어로 고정한다(AppLocale 참고).
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(BgSurface, RoundedCornerShape(12.dp))
+                    .border(1.dp, BgBorder, RoundedCornerShape(12.dp))
+                    .padding(if (tablet) 16.dp else if (compact) 9.dp else 12.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text(
+                    context.getString(R.string.language_section_title),
+                    color = TextMain,
+                    fontSize = if (tablet) 15.sp else 12.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    context.getString(R.string.language_section_desc),
+                    color = TextSub,
+                    fontSize = if (tablet) 12.sp else 10.sp
+                )
+                Spacer(Modifier.height(2.dp))
+                val currentLocale = kr.co.donghyun.flamelauncher.data.settings.AppLocale.load(context)
+                listOf(
+                    kr.co.donghyun.flamelauncher.data.settings.AppLocale.SYSTEM to
+                        context.getString(R.string.language_system),
+                    kr.co.donghyun.flamelauncher.data.settings.AppLocale.ENGLISH to "English",
+                    kr.co.donghyun.flamelauncher.data.settings.AppLocale.KOREAN to "한국어",
+                ).forEach { (locale, label) ->
+                    GlobalRendererOption(
+                        emoji = if (locale == currentLocale) "🌐" else " ",
+                        title = label,
+                        desc = "",
+                        selected = locale == currentLocale,
+                        tablet = tablet,
+                        onClick = {
+                            kr.co.donghyun.flamelauncher.data.settings.AppLocale.save(context, locale)
+                            // 리소스를 다시 읽어야 바뀐 언어가 보인다.
+                            (context as? android.app.Activity)?.recreate()
+                        },
+                    )
+                }
+            }
+
             // 전역 렌더러 섹션
             Column(
                 modifier = Modifier

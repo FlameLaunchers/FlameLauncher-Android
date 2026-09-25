@@ -509,4 +509,7 @@
     <string name="progress_downloading_mods">모드 다운로드 중...</string>
     <string name="progress_retrying_mods">모드 재시도 중...</string>
     <string name="progress_retrying_file">재시도: %1$s</string>
+    <string name="language_section_title">언어</string>
+    <string name="language_section_desc">앱에 표시할 언어를 고릅니다. 고르면 바로 적용됩니다.</string>
+    <string name="language_system">시스템 언어</string>
 </resources>
