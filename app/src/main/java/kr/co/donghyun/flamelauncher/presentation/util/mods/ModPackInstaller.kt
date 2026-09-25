@@ -16,12 +16,14 @@ import kr.co.donghyun.flamelauncher.data.mods.CurseForgeMod
 import kr.co.donghyun.flamelauncher.data.mods.ManifestFile
 import kr.co.donghyun.flamelauncher.data.mojang.DownloadPhase
 import kr.co.donghyun.flamelauncher.data.mojang.DownloadProgress
+import okhttp3.ConnectionPool
 import okhttp3.Dispatcher
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
 import java.io.FileOutputStream
 import java.util.Collections
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.zip.ZipFile
 
@@ -52,6 +54,8 @@ class ModPackInstaller(
             maxRequests = 64
             maxRequestsPerHost = 48
         })
+        // 유휴 커넥션 기본값(5)이면 동시 48개가 끝날 때마다 버려져 파일마다 TLS 를 다시 맺는다.
+        .connectionPool(ConnectionPool(48, 5, TimeUnit.MINUTES))
         .build()
     private val gson = Gson()
     private val PARALLELISM = 48

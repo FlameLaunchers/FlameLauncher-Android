@@ -6,11 +6,13 @@ import com.google.gson.JsonArray
 import com.google.gson.JsonElement
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
+import kr.co.donghyun.flamelauncher.presentation.util.mapParallel
 import kr.co.donghyun.flamelauncher.presentation.util.minecraft.VersionRepository
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
 import java.io.FileOutputStream
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.zip.ZipFile
 
 /**
@@ -53,6 +55,12 @@ class ForgeInstaller(
     private val onProgress: (phase: String, current: Int, total: Int) -> Unit = { _, _, _ -> }
 ) {
     private val client = OkHttpClient()
+
+    private companion object {
+        // Forge/NeoForge 는 라이브러리가 100~250개다. 메이븐 저장소 여러 곳을 동시에 때리므로
+        // 너무 올리면 거절당한다 — 12면 왕복 대기가 거의 사라진다.
+        const val LIB_PARALLELISM = 12
+    }
 
     fun install(context : Context, mcVersion: String, forgeVersion: String, isNeoForge: Boolean = false): ForgeInstallResult {
         val fullVersion = "$mcVersion-$forgeVersion"
@@ -160,10 +168,15 @@ class ForgeInstaller(
 
 // 1) version.json libs — 디스크에 받고 classpath 에도 추가
         val totalGame = profile.libs.size
-        profile.libs.forEachIndexed { idx, lib ->
-            onProgress("Forge libs (game) ${idx + 1}/$totalGame: ${lib.name}", idx + 1, totalGame)
-            downloadLibrary(lib, librariesDir)?.let { jarList.add(it.absolutePath) }
-        }
+        val gameDone = AtomicInteger(0)
+        // 하나씩 받으면 라이브러리 개수만큼 요청 왕복이 쌓인다. 순서는 mapParallel 이 지켜준다
+        // (클래스패스 순서가 바뀌면 Forge 부트스트랩이 엉킨다).
+        mapParallel(profile.libs, LIB_PARALLELISM) { lib ->
+            val file = downloadLibrary(lib, librariesDir)
+            val n = gameDone.incrementAndGet()
+            onProgress("Forge libs (game) $n/$totalGame: ${lib.name}", n, totalGame)
+            file
+        }.forEach { file -> file?.let { jarList.add(it.absolutePath) } }
 
 // 2) install_profile.json libs — 디스크엔 받되 classpath 에는 추가하지 않는다.
 //    ProcessorLauncher 가 자체 URLClassLoader 로 띄울 때만 필요.
@@ -171,9 +184,11 @@ class ForgeInstaller(
 //    은 ASM/Netty 등을 통합 포함한 fat jar 가 많아서 게임 classpath 에 두면
 //    BootstrapLauncher 의 자동 모듈 등록 단계에서 split package 충돌이 줄줄이 발생.
         val totalProc = profile.processorLibs.size
-        profile.processorLibs.forEachIndexed { idx, lib ->
-            onProgress("Forge libs (processor) ${idx + 1}/$totalProc: ${lib.name}", idx + 1, totalProc)
+        val procDone = AtomicInteger(0)
+        mapParallel(profile.processorLibs, LIB_PARALLELISM) { lib ->
             downloadLibrary(lib, librariesDir)   // 반환값 무시 = jarList 에 안 더함
+            val n = procDone.incrementAndGet()
+            onProgress("Forge libs (processor) $n/$totalProc: ${lib.name}", n, totalProc)
         }
 
         Log.d("FLAME_LAUNCHER",

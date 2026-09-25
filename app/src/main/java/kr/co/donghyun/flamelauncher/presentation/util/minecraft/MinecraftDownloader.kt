@@ -14,6 +14,7 @@ import kr.co.donghyun.flamelauncher.data.mojang.DownloadProgress
 import kr.co.donghyun.flamelauncher.data.mojang.MCPrepareResult
 import kr.co.donghyun.flamelauncher.data.mojang.VersionEntry
 import kr.co.donghyun.flamelauncher.data.mojang.VersionManifest
+import okhttp3.ConnectionPool
 import okhttp3.Dispatcher
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -21,6 +22,7 @@ import java.io.File
 import java.io.FileOutputStream
 import java.security.MessageDigest
 import java.security.DigestInputStream
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
@@ -49,6 +51,9 @@ class MinecraftDownloader(
             maxRequests = 64
             maxRequestsPerHost = 32
         })
+        // ⚠️ 커넥션 풀 기본값은 유휴 5개다. 32개를 동시에 돌리면 끝난 커넥션이 곧바로 버려져서
+        //    다음 파일마다 TLS 핸드셰이크를 다시 한다(모바일에선 파일당 100~200ms). 동시 수만큼 남긴다.
+        .connectionPool(ConnectionPool(32, 5, TimeUnit.MINUTES))
         .build()
     private val gson = Gson()
 

@@ -180,7 +180,11 @@ enum class Renderer(
     }
 
     companion object {
-        fun fromId(id: String?): Renderer = entries.firstOrNull { it.id == id } ?: ZINK
+        /**
+         * 기본값은 MobileGlues 다. Zink(Vulkan)는 이 기기들에서 프레임이 쓸 수 없는 수준으로
+         * 떨어져서, 고르지 않은 사용자가 그 상태를 처음 보게 하면 안 된다.
+         */
+        fun fromId(id: String?): Renderer = entries.firstOrNull { it.id == id } ?: MOBILEGLUES
 
         /**
          * 현재 기기/설치 상태에서 인스턴스 설정에 노출할 렌더러 목록.
@@ -188,10 +192,10 @@ enum class Renderer(
          *
          */
         fun selectableRenderers(): List<Renderer> = buildList {
-            add(ZINK)
+            add(MOBILEGLUES)  // 기본값 — 내부 번들(libmobileglues.so)
             add(GL4ES)
             add(KRYPTON)      // 내부 번들(libng_gl4es.so)
-            add(MOBILEGLUES)  // 내부 번들(libmobileglues.so)
+            add(ZINK)
         }
     }
 }

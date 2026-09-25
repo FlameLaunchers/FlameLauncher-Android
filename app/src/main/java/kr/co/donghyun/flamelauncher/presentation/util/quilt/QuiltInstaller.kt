@@ -3,9 +3,11 @@ package kr.co.donghyun.flamelauncher.presentation.util.quilt
 import android.util.Log
 import com.google.gson.JsonElement
 import com.google.gson.JsonParser
+import kr.co.donghyun.flamelauncher.presentation.util.mapParallel
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
+import java.util.concurrent.atomic.AtomicInteger
 import java.io.FileOutputStream
 
 data class QuiltInstallResult(
@@ -48,17 +50,16 @@ class QuiltInstaller(
                 ?: return QuiltInstallResult(success = false, error = "libraries 누락")
 
             val total = libs.size()
-            libs.forEachIndexed { i, el ->
+            val done = AtomicInteger(0)
+            // 하나씩 받으면 라이브러리 개수만큼 요청 왕복이 쌓인다. 순서는 mapParallel 이 지켜준다.
+            mapParallel((0 until total).map { libs[it] }, 12) { el ->
                 val lib = el.asJsonObject
-                val name = lib["name"]?.asString ?: return@forEachIndexed
-                val baseUrl = lib["url"]?.asString ?: "https://maven.quiltmc.org/repository/release/"
+                val name = lib["name"]?.asString
+                val destFile = name?.let { File(librariesDir, mavenNameToPath(it)) }
 
-                onProgress("Quilt 라이브러리 ${i + 1}/$total", i + 1, total)
-
-                val path = mavenNameToPath(name)
-                val destFile = File(librariesDir, path)
-
-                if (!destFile.exists() || destFile.length() == 0L) {
+                if (name != null && destFile != null && (!destFile.exists() || destFile.length() == 0L)) {
+                    val baseUrl = lib["url"]?.asString ?: "https://maven.quiltmc.org/repository/release/"
+                    val path = mavenNameToPath(name)
                     destFile.parentFile?.mkdirs()
                     val primary = if (baseUrl.endsWith("/")) "$baseUrl$path" else "$baseUrl/$path"
                     // Quilt 라이브러리는 quiltmc/fabricmc 메이븐에 걸쳐 있어서 순서대로 폴백.
@@ -70,10 +71,10 @@ class QuiltInstaller(
                         Log.w("FLAME_LAUNCHER", "Quilt 라이브러리 실패: $name")
                     }
                 }
-                if (destFile.exists() && destFile.length() > 0) {
-                    jarList.add(destFile.absolutePath)
-                }
-            }
+                val n = done.incrementAndGet()
+                onProgress("Quilt 라이브러리 $n/$total", n, total)
+                destFile?.takeIf { it.exists() && it.length() > 0 }
+            }.forEach { file -> file?.let { jarList.add(it.absolutePath) } }
 
             val gameJvmArgs = mutableListOf<String>()
             val gameArgs = mutableListOf<String>()
