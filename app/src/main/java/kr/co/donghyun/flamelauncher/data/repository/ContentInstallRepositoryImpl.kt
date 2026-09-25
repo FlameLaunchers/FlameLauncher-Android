@@ -559,7 +559,9 @@ class ContentInstallRepositoryImpl @Inject constructor(
     }
 
     /**
-     * 모드팩 설치가 끝난 뒤 mods/ 폴더를 스캔해 Sodium 본체가 있으면 Podium 을 자동으로 끼워넣는다.
+     * mods/ 폴더를 스캔해 Sodium 본체가 있으면 Podium 을 자동으로 끼워넣는다.
+     * 모드팩 설치 뒤와, **모드를 하나씩 설치한 뒤** 둘 다에서 부른다 — Sodium 을 직접 골라 넣은
+     * 인스턴스도 Podium 없이는 게임이 아예 안 켜진다(Sodium 이 Pojav 계열 환경을 감지해 스스로 거부).
      *
      * 트리거 조건:
      *  - loader 가 fabric 또는 neoforge 일 것 (Podium 은 Forge / vanilla 미지원)
@@ -569,7 +571,7 @@ class ContentInstallRepositoryImpl @Inject constructor(
      * Podium 빌드 선택은 mc + loader 정확 매칭 → loader 만 매칭 → 최신 무조건 폴백 (Podium 은
      * 호환성 패치 모드라 mc 버전 잠그지 않아도 동작하는 경우가 대부분).
      */
-    private suspend fun installPodiumIfSodiumInModpack(
+    private suspend fun installPodiumIfSodium(
         instanceDir: File,
         mcVersion: String,
         loaderType: String?,
@@ -1126,6 +1128,7 @@ class ContentInstallRepositoryImpl @Inject constructor(
             if (!beginInstall(mod, context.getString(R.string.status_installing_into_instance, mod.name, instanceId))) return
             try {
                 addModrinthContentToInstance(mod, instanceId, contentType, worldName)
+                augmentPodiumIfNeeded(instanceId, contentType)
             } catch (e: Exception) {
                 Log.e("FLAME_LAUNCHER", "Modrinth 기존 인스턴스 설치 실패: ${e.message}", e)
             } finally {
@@ -1137,11 +1140,20 @@ class ContentInstallRepositoryImpl @Inject constructor(
         if (!beginInstall(mod, context.getString(R.string.status_installing_into_instance, mod.name, instanceId))) return
         try {
             addContentToInstance(cfMod, instanceId, contentType, worldName)
+            augmentPodiumIfNeeded(instanceId, contentType)
         } catch (e: Exception) {
             Log.e("FLAME_LAUNCHER", "기존 인스턴스 설치 실패: ${e.message}", e)
         } finally {
             endInstall()
         }
+    }
+
+    /** 모드를 하나 넣은 뒤, 그게 Sodium 이었으면 Podium 도 같이 넣는다. */
+    private suspend fun augmentPodiumIfNeeded(instanceId: String, contentType: ContentType) {
+        if (contentType != ContentType.MOD) return
+        val instanceDir = InstanceManager.instanceDir(context, instanceId)
+        val meta = InstanceManager.loadMeta(instanceDir) ?: return
+        installPodiumIfSodium(instanceDir, meta.mcVersion, meta.loaderType)
     }
 
     suspend fun installToNewInstance(
@@ -1483,7 +1495,7 @@ class ContentInstallRepositoryImpl @Inject constructor(
     ) {
         // ── 1.5) Sodium 본체가 모드팩에 있으면 Podium 자동 동봉 ──
         _statusMessage.value = context.getString(R.string.status_checking_sodium)
-        installPodiumIfSodiumInModpack(instanceDir, mcVersion, loaderType)
+        installPodiumIfSodium(instanceDir, mcVersion, loaderType)
 
         // ── 2) Mojang manifest 에서 해당 MC 버전 entry 확보 ─────────
         val versionEntry = withContext(Dispatchers.IO) {
