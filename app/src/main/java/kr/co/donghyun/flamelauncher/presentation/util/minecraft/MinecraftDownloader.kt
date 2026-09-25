@@ -84,6 +84,9 @@ class MinecraftDownloader(
         // 라이브러리
         val librariesDir = File(instanceDir, "libraries")
         val artifacts = manifest.libraries.mapNotNull { lib ->
+            // 데스크톱 네이티브(:natives-linux/macos/windows)는 x86_64·glibc 묶음이라 이 기기에서
+            // 쓸 일이 없다. 받아봐야 용량만 먹고 클래스패스만 어지럽힌다(26.3 기준 60개).
+            if (lib.name.contains(":natives-")) return@mapNotNull null
             lib.downloads.artifact?.let { lib to it }
         }
         val done = AtomicInteger(0)

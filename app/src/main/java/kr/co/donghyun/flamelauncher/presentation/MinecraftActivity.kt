@@ -258,6 +258,9 @@ class MinecraftActivity : org.libsdl.app.SDLActivity() {
         // ELF e_machine 값: arm64. jar 내 .so 가 이 기기에서 로드 가능한지 판정에 사용.
         private const val ELF_EM_AARCH64 = 183
 
+        /** `…-natives-linux.jar` 같은 데스크톱 네이티브 묶음. 클래스패스에 올리면 안 된다. */
+        private val NATIVES_JAR = Regex("-natives-[a-z0-9_]+\\.jar$")
+
         /** jar-in-jar 로 들어와 게임을 죽이는 것이 확인된 모드 (파일명 접두사, 소문자). */
         private val FATAL_NESTED_MODS = listOf(
             "aaa-particles",   // Effekseer x86_64 네이티브를 인스턴스 폴더에 풀고 System.load
@@ -2201,6 +2204,14 @@ class MinecraftActivity : org.libsdl.app.SDLActivity() {
                     val lwjglGlfwPattern = Regex("^lwjgl-glfw-\\d.*\\.jar$")
                     if (lwjglGlfwPattern.matches(lowerName)) {
                         Log.d("FLAME_LAUNCHER", "번들 lwjgl-glfw 제외 (PojavLauncher patched 사용): ${f.name}")
+                        return@forEach
+                    }
+
+                    // ⚠️ -natives-* 는 데스크톱(리눅스/맥/윈도) 네이티브 묶음이라 여기선 쓸 데가 없는데,
+                    //    본체 jar 과 group:artifact 가 같아서 아래 중복 제거에 **먼저 걸리면 본체를 밀어낸다.**
+                    //    26.3 에서 jtracy 본체가 이렇게 밀려 Minecraft.<clinit> 이 TracyClient 를 못 찾고 죽었다.
+                    if (NATIVES_JAR.containsMatchIn(lowerName)) {
+                        Log.d("FLAME_LAUNCHER", "데스크톱 네이티브 jar 제외: ${f.name}")
                         return@forEach
                     }
 
