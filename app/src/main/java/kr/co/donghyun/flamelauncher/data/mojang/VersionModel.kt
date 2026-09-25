@@ -38,7 +38,13 @@ data class AssetIndex(
 data class DownloadItem(
     val url: String,
     val size: Long,
-    val sha1: String
+    val sha1: String,
+    /**
+     * 저장소 기준 상대 경로. 라이브러리 항목에만 있고, **이게 정본이다.**
+     * 이름(group:artifact:version:classifier)에서 다시 만들면 분류자가 빠져
+     * jtracy 처럼 항목 5개가 같은 파일로 겹친다(본체 jar 이 macOS 네이티브로 덮여 클래스 소실).
+     */
+    val path: String? = null
 )
 
 data class DownloadProgress(

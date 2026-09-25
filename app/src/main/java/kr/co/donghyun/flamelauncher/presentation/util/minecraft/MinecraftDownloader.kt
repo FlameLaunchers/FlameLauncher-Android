@@ -74,7 +74,8 @@ class MinecraftDownloader(
         // 클라이언트 JAR
         onProgress(DownloadProgress(phase = DownloadPhase.DOWNLOADING_CLIENT, fileName = "${manifest.id}.jar"))
         val clientJar = File(instanceDir, "versions/${manifest.id}/${manifest.id}.jar")
-        downloadFile(manifest.downloads.client.url, clientJar, manifest.downloads.client.sha1)
+        downloadFile(manifest.downloads.client.url, clientJar, manifest.downloads.client.sha1,
+            manifest.downloads.client.size)
 
         // 에셋 인덱스
         val assetIndexFile = File(assetsDir, "indexes/${manifest.assetIndex.id}.json")
@@ -87,8 +88,12 @@ class MinecraftDownloader(
         }
         val done = AtomicInteger(0)
         runBlocking { forEachParallel(artifacts, LIBRARY_PARALLELISM) { (lib, artifact) ->
-            val libFile = File(librariesDir, getLibraryPath(lib.name))
-            downloadFile(artifact.url, libFile, artifact.sha1)
+            // ⚠️ 경로는 매니페스트의 artifact.path 를 그대로 쓴다. 이름에서 다시 만들면 분류자가
+            //    빠져서 "com.mojang:jtracy:1.14.38" 과 "…:natives-macos" 가 같은 파일이 된다.
+            //    (순차로 받을 땐 본체가 먼저라 가려졌는데, 병렬로 받자 네이티브가 본체를 덮어
+            //     TracyClient 클래스가 사라지고 26.3 이 Minecraft.<clinit> 에서 죽었다)
+            val libFile = File(librariesDir, artifact.path ?: getLibraryPath(lib.name))
+            downloadFile(artifact.url, libFile, artifact.sha1, artifact.size)
             onProgress(DownloadProgress(
                 phase = DownloadPhase.DOWNLOADING_LIBRARIES,
                 current = done.incrementAndGet(),
@@ -121,10 +126,15 @@ class MinecraftDownloader(
      * 완성본처럼 남지 않는다(그러면 다음 실행 때 "있으니 건너뜀"으로 영영 안 고쳐진다).
      * sha1 이 오면 받으면서 같이 검사한다 — 어차피 스트림을 지나가므로 공짜다.
      */
-    private fun downloadFile(url: String, destFile: File, expectedSha1: String?) {
-        if (destFile.exists() && destFile.length() > 0) return
+    private fun downloadFile(url: String, destFile: File, expectedSha1: String?, expectedSize: Long = 0) {
+        // 크기를 아는 경우엔 맞는지까지 본다 — 예전 버전이 분류자 충돌로 엉뚱한 jar 을 받아둔
+        // 인스턴스가 있어서, 그냥 "있으면 통과" 로 두면 영영 안 고쳐진다.
+        if (destFile.exists() && destFile.length() > 0 &&
+            (expectedSize <= 0 || destFile.length() == expectedSize)
+        ) return
         destFile.parentFile?.mkdirs()
-        val part = File(destFile.parentFile, "${destFile.name}.part")
+        // .part 이름에 스레드를 섞는다. 같은 대상을 두 스레드가 받더라도 서로의 임시 파일을 안 밟는다.
+        val part = File(destFile.parentFile, "${destFile.name}.${Thread.currentThread().id}.part")
         val request = Request.Builder().url(url).build()
         client.newCall(request).execute().use { response ->
             if (!response.isSuccessful) {
@@ -189,10 +199,12 @@ class MinecraftDownloader(
             }.awaitAll()
         }
 
+    /** artifact.path 가 없을 때만 쓰는 폴백. 분류자(4번째 토큰)를 빠뜨리면 파일이 겹친다. */
     private fun getLibraryPath(name: String): String {
         val parts = name.split(":")
-        val basePath = "${parts[0].replace('.', '/')}/${parts[1]}/${parts[2]}/${parts[1]}-${parts[2]}"
-        return "$basePath.jar"
+        val classifier = parts.getOrNull(3)?.takeIf { it.isNotBlank() }?.let { "-$it" } ?: ""
+        return "${parts[0].replace('.', '/')}/${parts[1]}/${parts[2]}/" +
+            "${parts[1]}-${parts[2]}$classifier.jar"
     }
 
     companion object {
