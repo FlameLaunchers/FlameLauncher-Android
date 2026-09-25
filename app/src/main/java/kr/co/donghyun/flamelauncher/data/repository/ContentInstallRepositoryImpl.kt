@@ -1211,7 +1211,8 @@ class ContentInstallRepositoryImpl @Inject constructor(
         _progress.value = DownloadProgress(phase = DownloadPhase.FETCHING_MANIFEST)
         _statusMessage.value = context.getString(R.string.status_downloading_mc, mcVersion)
         val mcResult = withContext(Dispatchers.IO) {
-            MinecraftDownloader(instanceDir, versionEntry) { _progress.value = it }.prepare()
+            MinecraftDownloader(instanceDir, versionEntry,
+                InstanceManager.sharedAssetsDir(context)) { _progress.value = it }.prepare()
         }
 
         // 빈 폴더 미리 생성 — 텍스처/쉐이더 떨어뜨릴 곳
@@ -1263,7 +1264,8 @@ class ContentInstallRepositoryImpl @Inject constructor(
         _progress.value = DownloadProgress(phase = DownloadPhase.FETCHING_MANIFEST)
         _statusMessage.value = context.getString(R.string.status_downloading_mc, mcVersion)
         val mcResult = withContext(Dispatchers.IO) {
-            MinecraftDownloader(instanceDir, versionEntry) { _progress.value = it }.prepare()
+            MinecraftDownloader(instanceDir, versionEntry,
+                InstanceManager.sharedAssetsDir(context)) { _progress.value = it }.prepare()
         }
 
         _statusMessage.value = context.getString(R.string.status_installing_loader, "Fabric", loaderVersion)
@@ -1344,7 +1346,8 @@ class ContentInstallRepositoryImpl @Inject constructor(
         _progress.value = DownloadProgress(phase = DownloadPhase.FETCHING_MANIFEST)
         _statusMessage.value = context.getString(R.string.status_downloading_mc, mcVersion)
         val mcResult = withContext(Dispatchers.IO) {
-            MinecraftDownloader(instanceDir, versionEntry) { _progress.value = it }.prepare()
+            MinecraftDownloader(instanceDir, versionEntry,
+                InstanceManager.sharedAssetsDir(context)) { _progress.value = it }.prepare()
         }
 
         // 2) Forge / NeoForge 설치
@@ -1496,7 +1499,8 @@ class ContentInstallRepositoryImpl @Inject constructor(
         // ── 3) 바닐라 MC 다운로드 (인스턴스 dir 안으로) ─────────────
         _statusMessage.value = context.getString(R.string.status_downloading_mc, mcVersion)
         val mcResult = withContext(Dispatchers.IO) {
-            MinecraftDownloader(instanceDir, versionEntry) { _progress.value = it }.prepare()
+            MinecraftDownloader(instanceDir, versionEntry,
+                InstanceManager.sharedAssetsDir(context)) { _progress.value = it }.prepare()
         }
 
         // ── 3.5) 모드팩 로고를 인스턴스 아이콘으로 저장 (실패해도 무시) ──

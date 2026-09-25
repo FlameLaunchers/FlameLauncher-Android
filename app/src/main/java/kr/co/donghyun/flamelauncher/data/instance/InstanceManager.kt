@@ -43,6 +43,14 @@ object InstanceManager {
     fun instanceDir(context: Context, id: String): File =
         File(instancesDir(context), id)
 
+    /**
+     * 인스턴스가 함께 쓰는 에셋 폴더. 같은 MC 버전을 두 번 설치해도 오브젝트 수천 개를
+     * 다시 받지 않는다(1.21 기준 인스턴스당 수백 MB).
+     * 실행할 때 MinecraftActivity 가 보는 searchDirs 에 이미 들어있는 위치다.
+     */
+    fun sharedAssetsDir(context: Context): File =
+        File(context.getExternalFilesDir(null) ?: context.filesDir, "assets")
+
     fun listInstances(context: Context): List<InstanceMeta> {
         val dir = instancesDir(context)
         if (!dir.exists()) return emptyList()

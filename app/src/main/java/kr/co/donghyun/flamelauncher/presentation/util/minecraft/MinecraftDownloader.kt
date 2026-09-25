@@ -2,32 +2,65 @@ package kr.co.donghyun.flamelauncher.presentation.util.minecraft
 
 import android.util.Log
 import com.google.gson.Gson
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kr.co.donghyun.flamelauncher.data.mojang.DownloadPhase
 import kr.co.donghyun.flamelauncher.data.mojang.DownloadProgress
 import kr.co.donghyun.flamelauncher.data.mojang.MCPrepareResult
 import kr.co.donghyun.flamelauncher.data.mojang.VersionEntry
 import kr.co.donghyun.flamelauncher.data.mojang.VersionManifest
+import okhttp3.Dispatcher
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
 import java.io.FileOutputStream
+import java.security.MessageDigest
+import java.security.DigestInputStream
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * 바닐라 MC 다운로더 — 모든 파일을 instanceDir 하위에 저장
  *
  * instanceDir/
- *   assets/indexes/
- *   assets/objects/
  *   libraries/
  *   versions/<versionId>/
+ * 에셋(assets/indexes, assets/objects)은 [sharedAssetsDir] 이 있으면 인스턴스끼리 공유한다.
  */
 class MinecraftDownloader(
     private val instanceDir: File,   // 인스턴스 루트 (예: instances/vanilla_1.21.4)
     private val versionEntry: VersionEntry,
+    /**
+     * 인스턴스가 함께 쓰는 에셋 폴더(보통 getExternalFilesDir(null)/assets).
+     * 같은 MC 버전을 두 번 설치해도 오브젝트 수천 개를 다시 받지 않는다.
+     * null 이면 예전처럼 인스턴스 안에 받는다.
+     */
+    private val sharedAssetsDir: File? = null,
     private val onProgress: (DownloadProgress) -> Unit
 ) {
-    private val client = OkHttpClient()
+    // 기본 OkHttpClient 는 호스트당 5개까지만 동시 요청한다. 에셋은 1~50KB 짜리가 수천 개라
+    // 대역폭이 아니라 요청 왕복 횟수가 병목이어서, 동시 연결 수가 그대로 체감 속도가 된다.
+    private val client = OkHttpClient.Builder()
+        .dispatcher(Dispatcher().apply {
+            maxRequests = 64
+            maxRequestsPerHost = 32
+        })
+        .build()
     private val gson = Gson()
+
+    /**
+     * 이미 인스턴스 안에 에셋을 받아둔 인스턴스는 그대로 둔다 — 실행할 때 런처가 인스턴스 폴더를
+     * 먼저 보기 때문에, 인덱스는 인스턴스에 · 오브젝트는 공용에 나뉘면 텍스처가 통째로 빈다.
+     */
+    private val assetsDir: File = run {
+        val local = File(instanceDir, "assets")
+        val hasLocal = File(local, "indexes").listFiles()?.isNotEmpty() == true
+        if (sharedAssetsDir == null || hasLocal) local else sharedAssetsDir
+    }
 
     fun prepare(): MCPrepareResult {
         onProgress(DownloadProgress(phase = DownloadPhase.FETCHING_MANIFEST))
@@ -39,7 +72,7 @@ class MinecraftDownloader(
         downloadFile(manifest.downloads.client.url, clientJar, manifest.downloads.client.sha1)
 
         // 에셋 인덱스
-        val assetIndexFile = File(instanceDir, "assets/indexes/${manifest.assetIndex.id}.json")
+        val assetIndexFile = File(assetsDir, "indexes/${manifest.assetIndex.id}.json")
         downloadFile(manifest.assetIndex.url, assetIndexFile, null)
 
         // 라이브러리
@@ -47,22 +80,22 @@ class MinecraftDownloader(
         val artifacts = manifest.libraries.mapNotNull { lib ->
             lib.downloads.artifact?.let { lib to it }
         }
-        artifacts.forEachIndexed { index, (lib, artifact) ->
-            val path = getLibraryPath(lib.name)
-            val libFile = File(librariesDir, path)
+        val done = AtomicInteger(0)
+        runBlocking { forEachParallel(artifacts, LIBRARY_PARALLELISM) { (lib, artifact) ->
+            val libFile = File(librariesDir, getLibraryPath(lib.name))
+            downloadFile(artifact.url, libFile, artifact.sha1)
             onProgress(DownloadProgress(
                 phase = DownloadPhase.DOWNLOADING_LIBRARIES,
-                current = index + 1,
+                current = done.incrementAndGet(),
                 total = artifacts.size,
                 fileName = libFile.name
             ))
-            downloadFile(artifact.url, libFile, artifact.sha1)
-        }
+        } }
 
         // 에셋 오브젝트
-        downloadAssets(assetIndexFile, File(instanceDir, "assets/objects"))
+        downloadAssets(assetIndexFile, File(assetsDir, "objects"))
 
-        Log.d("FLAME_LAUNCHER", "✅ MC ${manifest.id} 준비 완료 → ${instanceDir.absolutePath}")
+        Log.d("FLAME_LAUNCHER", "✅ MC ${manifest.id} 준비 완료 → ${instanceDir.absolutePath} (에셋: ${assetsDir.absolutePath})")
         return MCPrepareResult(
             assetIndexId = manifest.assetIndex.id,
             mainClass = manifest.mainClass,
@@ -78,19 +111,36 @@ class MinecraftDownloader(
         }
     }
 
+    /**
+     * 받는 동안엔 `.part` 로 두고 끝나면 이름을 바꾼다. 중간에 앱이 죽어도 반쪽짜리 파일이
+     * 완성본처럼 남지 않는다(그러면 다음 실행 때 "있으니 건너뜀"으로 영영 안 고쳐진다).
+     * sha1 이 오면 받으면서 같이 검사한다 — 어차피 스트림을 지나가므로 공짜다.
+     */
     private fun downloadFile(url: String, destFile: File, expectedSha1: String?) {
         if (destFile.exists() && destFile.length() > 0) return
         destFile.parentFile?.mkdirs()
+        val part = File(destFile.parentFile, "${destFile.name}.part")
         val request = Request.Builder().url(url).build()
         client.newCall(request).execute().use { response ->
             if (!response.isSuccessful) {
                 Log.w("FLAME_LAUNCHER", "다운로드 실패 (${response.code}): $url")
                 return
             }
-            response.body?.byteStream()?.use { input ->
-                FileOutputStream(destFile).use { input.copyTo(it) }
+            val body = response.body ?: return
+            val digest = MessageDigest.getInstance("SHA-1")
+            DigestInputStream(body.byteStream(), digest).use { input ->
+                FileOutputStream(part).use { input.copyTo(it) }
+            }
+            if (expectedSha1 != null) {
+                val actual = digest.digest().joinToString("") { "%02x".format(it) }
+                if (!actual.equals(expectedSha1, ignoreCase = true)) {
+                    Log.w("FLAME_LAUNCHER", "SHA-1 불일치로 폐기: ${destFile.name}")
+                    part.delete()
+                    return
+                }
             }
         }
+        part.renameTo(destFile)
     }
 
     private fun downloadAssets(assetIndexFile: File, objectsDir: File) {
@@ -98,40 +148,50 @@ class MinecraftDownloader(
         val json = assetIndexFile.readText()
         val objects = com.google.gson.JsonParser.parseString(json)
             .asJsonObject["objects"].asJsonObject
-        val entries = objects.entrySet().toList()
-        val total = entries.size
-        var downloaded = 0
+        val hashes = objects.entrySet().map { it.value.asJsonObject["hash"].asString }
+        val total = hashes.size
+        val done = AtomicInteger(0)
 
-        entries.forEach { (_, value) ->
-            val hash = value.asJsonObject["hash"].asString
+        runBlocking { forEachParallel(hashes, ASSET_PARALLELISM) { hash ->
             val prefix = hash.substring(0, 2)
-            val destFile = File(objectsDir, "$prefix/$hash")
-            downloaded++
-            onProgress(DownloadProgress(
-                phase = DownloadPhase.DOWNLOADING_ASSETS,
-                current = downloaded,
-                total = total,
-                fileName = hash.take(12) + "..."
-            ))
-            if (destFile.exists() && destFile.length() > 0) return@forEach
-            destFile.parentFile?.mkdirs()
             try {
-                val url = "https://resources.download.minecraft.net/$prefix/$hash"
-                val request = Request.Builder().url(url).build()
-                client.newCall(request).execute().use { response ->
-                    if (response.isSuccessful) {
-                        response.body?.byteStream()?.use { input ->
-                            FileOutputStream(destFile).use { input.copyTo(it) }
-                        }
-                    }
-                }
+                // 에셋은 파일 이름이 곧 sha1 이라 검사도 공짜로 딸려온다.
+                downloadFile(
+                    "https://resources.download.minecraft.net/$prefix/$hash",
+                    File(objectsDir, "$prefix/$hash"),
+                    hash
+                )
             } catch (_: Exception) {}
-        }
+            val n = done.incrementAndGet()
+            // 파일마다 UI 를 때리면 수천 번 리컴포지션이 돈다 — 32개마다 한 번만 보고.
+            if (n % 32 == 0 || n == total) {
+                onProgress(DownloadProgress(
+                    phase = DownloadPhase.DOWNLOADING_ASSETS,
+                    current = n,
+                    total = total,
+                    fileName = hash.take(12) + "..."
+                ))
+            }
+        } }
     }
+
+    /** 최대 [limit] 개씩 겹쳐서 돌린다. 모드팩 설치기(ModPackInstaller)와 같은 방식. */
+    private suspend fun <T> forEachParallel(items: List<T>, limit: Int, body: (T) -> Unit) =
+        coroutineScope {
+            val semaphore = Semaphore(limit)
+            items.map { item ->
+                async(Dispatchers.IO) { semaphore.withPermit { body(item) } }
+            }.awaitAll()
+        }
 
     private fun getLibraryPath(name: String): String {
         val parts = name.split(":")
         val basePath = "${parts[0].replace('.', '/')}/${parts[1]}/${parts[2]}/${parts[1]}-${parts[2]}"
         return "$basePath.jar"
+    }
+
+    companion object {
+        private const val ASSET_PARALLELISM = 32
+        private const val LIBRARY_PARALLELISM = 8
     }
 }

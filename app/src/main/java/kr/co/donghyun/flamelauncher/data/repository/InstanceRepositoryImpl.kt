@@ -49,6 +49,7 @@ class InstanceRepositoryImpl @Inject constructor(
         val preparer = MinecraftDownloader(
             instanceDir = instanceDir,
             versionEntry = dataVersion,
+            sharedAssetsDir = InstanceManager.sharedAssetsDir(context),
             onProgress = { onProgress(it.toDomain()) }
         )
         val result = preparer.prepare()
@@ -100,6 +101,7 @@ class InstanceRepositoryImpl @Inject constructor(
         val mcPreparer = MinecraftDownloader(
             instanceDir = instanceDir,
             versionEntry = dataVersion,
+            sharedAssetsDir = InstanceManager.sharedAssetsDir(context),
             onProgress = { onProgress(it.toDomain()) }
         )
         val manifest = mcPreparer.prepare()
@@ -164,6 +166,7 @@ class InstanceRepositoryImpl @Inject constructor(
         val mcPreparer = MinecraftDownloader(
             instanceDir = instanceDir,
             versionEntry = dataVersion,
+            sharedAssetsDir = InstanceManager.sharedAssetsDir(context),
             onProgress = { onProgress(it.toDomain()) }
         )
         val manifest = mcPreparer.prepare()
