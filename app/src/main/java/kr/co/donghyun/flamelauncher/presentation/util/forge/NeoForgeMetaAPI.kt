@@ -37,9 +37,22 @@ class NeoForgeMetaAPI {
         }
     }
 
+    /**
+     * 네오포지 버전 → 대응 MC 버전.
+     *
+     * 스키마가 두 가지다:
+     *  - 세 조각 `21.1.251`      → `1.21.1` (마인크래프트가 1.x 이던 시절, 앞의 1. 은 생략돼 있다)
+     *  - 네 조각 `26.3.0.22-beta` → `26.3`  (26 부터 MC 버전이 1.x 가 아니다)
+     * 네 조각을 안 다루면 26.x 에서 목록이 통째로 비어 "네오포지 없음" 으로 보인다.
+     */
     private fun neoforgeVersionToMc(v: String): String? {
         val base = v.substringBefore("-") // "21.1.43-beta" 같은 접미사 제거
         val parts = base.split(".")
+        if (parts.size >= 4) {
+            val major = parts[0].toIntOrNull() ?: return null
+            val minor = parts[1].toIntOrNull() ?: return null
+            return "$major.$minor"
+        }
         if (parts.size < 3) return null
         val minor = parts[0].toIntOrNull() ?: return null
         val patch = parts[1].toIntOrNull() ?: return null

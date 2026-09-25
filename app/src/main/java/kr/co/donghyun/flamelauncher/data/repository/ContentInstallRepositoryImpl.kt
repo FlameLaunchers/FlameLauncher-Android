@@ -41,6 +41,7 @@ import kr.co.donghyun.flamelauncher.presentation.util.forge.ForgeMetaAPI
 import kr.co.donghyun.flamelauncher.presentation.util.forge.NeoForgeMetaAPI
 import kr.co.donghyun.flamelauncher.presentation.util.minecraft.MinecraftDownloader
 import kr.co.donghyun.flamelauncher.presentation.util.minecraft.VersionRepository
+import kr.co.donghyun.flamelauncher.presentation.util.mods.ModFileNames
 import kr.co.donghyun.flamelauncher.presentation.util.mods.CurseForgeAPI
 import kr.co.donghyun.flamelauncher.presentation.util.mods.ModPackInstaller
 import kr.co.donghyun.flamelauncher.presentation.util.mods.ModrinthAPI
@@ -1815,11 +1816,7 @@ class ContentInstallRepositoryImpl @Inject constructor(
      *
      * jar 이름에서 첫 숫자가 등장하기 직전까지를 mod 식별 prefix 로 사용.
      */
-    private fun extractModFilePrefix(fileName: String): String {
-        val nameOnly = fileName.removeSuffix(".jar")
-        val m = Regex("^([a-zA-Z][a-zA-Z0-9_\\-]*?)[-_]+\\d").find(nameOnly)
-        return m?.groupValues?.get(1) ?: nameOnly
-    }
+    private fun extractModFilePrefix(fileName: String): String = ModFileNames.prefix(fileName)
 
     private fun removeConflictingJars(outDir: File, newFileName: String) {
         val newPrefix = extractModFilePrefix(newFileName)
