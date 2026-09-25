@@ -257,6 +257,11 @@ class MinecraftActivity : org.libsdl.app.SDLActivity() {
         private const val EXTRA_VERSION_ID = "version_id"
         // ELF e_machine 값: arm64. jar 내 .so 가 이 기기에서 로드 가능한지 판정에 사용.
         private const val ELF_EM_AARCH64 = 183
+
+        /** jar-in-jar 로 들어와 게임을 죽이는 것이 확인된 모드 (파일명 접두사, 소문자). */
+        private val FATAL_NESTED_MODS = listOf(
+            "aaa-particles",   // Effekseer x86_64 네이티브를 인스턴스 폴더에 풀고 System.load
+        )
         private const val EXTRA_ASSET_INDEX = "asset_index"
         private const val EXTRA_EXTRA_JARS = "extra_jars"
         private const val EXTRA_MAIN_CLASS = "main_class"
@@ -1767,10 +1772,14 @@ class MinecraftActivity : org.libsdl.app.SDLActivity() {
             val prefixHit = blockedPrefixes.any { lower.startsWith(it) }
             // (2) jar 내부 네이티브 ABI 스캔: .so 가 있는데 arm64 가 하나도 없으면 데스크탑 전용으로 판정
             val nativeVerdict = if (prefixHit) null else scanJarNativeAbi(f)
+            // (3) jar-in-jar 안에 든 치명적 모드 — (2)는 부모 jar 의 엔트리만 보므로 못 잡는다.
+            val nestedVerdict =
+                if (prefixHit || nativeVerdict != null) null else scanNestedFatalMods(f)
 
             val reason: String? = when {
                 prefixHit -> prefixReason(lower)
                 nativeVerdict != null -> nativeVerdict
+                nestedVerdict != null -> nestedVerdict
                 else -> null
             }
             if (reason == null) return@forEach  // 호환 → 그대로 둠
@@ -1841,6 +1850,38 @@ class MinecraftActivity : org.libsdl.app.SDLActivity() {
         if (sawSo && sawForeignNative) return getString(R.string.desktop_only_native_no_arm64)
         if (!sawSo && sawForeignNative) return getString(R.string.desktop_only_native_dll_dylib)
         // .so 가 있지만 전부 헤더를 못 읽은 애매한 경우 → 호환으로 둔다(오탐 방지)
+        return null
+    }
+
+    /**
+     * Fabric 의 jar-in-jar(`META-INF/jars/` 안의 jar) 안에 든, **게임을 통째로 죽이는** 모드를 찾는다.
+     *
+     * 부모 jar 자체는 순수 자바라 위의 ABI 스캔에 안 걸리는데, 안에 든 모드가 데스크톱 네이티브를
+     * 직접 열면서 클라이언트 진입점에서 죽는다. 실제 사례(2026-09, Homestead 모드팩):
+     *   Eldritch End → 안에 AAAParticles → x86_64 Effekseer .so 를 인스턴스 폴더에 풀고 System.load
+     *   → 외부 저장소는 링커 네임스페이스가 거부하고, ELF 도 x86_64 라 arm64 에선 어떤 경로로도 못 연다.
+     *
+     * ⚠️ 목록을 넓히지 말 것. JiJ 에는 데스크톱 네이티브를 품고도 멀쩡히 도는 라이브러리가 흔하다
+     *    (예: 음성채팅의 opus4j/rnnoise4j — 로드에 실패해도 경고만 남기고 게임은 계속된다).
+     *    게임이 죽는 게 **확인된** 것만 넣는다.
+     */
+    private fun scanNestedFatalMods(jar: File): String? {
+        try {
+            java.util.zip.ZipFile(jar).use { zf ->
+                val entries = zf.entries()
+                while (entries.hasMoreElements()) {
+                    val name = entries.nextElement().name.lowercase()
+                    if (!name.startsWith("meta-inf/jars/") || !name.endsWith(".jar")) continue
+                    // 모드 id 는 aaa_particles 인데 파일 이름은 aaa-particles-… 이다. 둘 다 잡히게 맞춘다.
+                    val nested = name.substringAfterLast('/').replace('_', '-')
+                    if (FATAL_NESTED_MODS.any { nested.startsWith(it) }) {
+                        return getString(R.string.desktop_only_native_no_arm64)
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.w("FLAME_LAUNCHER", "⚠️ jar-in-jar 스캔 실패(무시): ${jar.name} — ${e.message}")
+        }
         return null
     }
 
