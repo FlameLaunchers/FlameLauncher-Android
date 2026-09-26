@@ -181,10 +181,16 @@ fun LoaderSelectDialog(
                         loading -> CenterSpinner(NeoGreen)
                         error != null -> ErrorText(error!!)
                         else -> {
-                            val visible =
-                                if (showAllNeoForge) neoforgeList
-                                else neoforgeList.filter { it.recommended || it.latest }
-                                    .ifEmpty { neoforgeList.take(5) }
+                            // ⚠️ 26.x 처럼 **정식 빌드가 아직 하나도 없는** 버전이 있다.
+                            //    그때 recommended 는 없고 latest 하나만 남아 목록이 한 줄로
+                            //    쪼그라든다 — 베타밖에 없는데 고를 게 없는 것처럼 보인다.
+                            //    정식이 없으면 최신 베타 5개를 그대로 보여준다.
+                            val hasStable = neoforgeList.any { it.recommended }
+                            val visible = when {
+                                showAllNeoForge -> neoforgeList
+                                hasStable -> neoforgeList.filter { it.recommended || it.latest }
+                                else -> neoforgeList.take(5)
+                            }
 
                             LazyColumn(
                                 modifier = Modifier.heightIn(max = 240.dp),

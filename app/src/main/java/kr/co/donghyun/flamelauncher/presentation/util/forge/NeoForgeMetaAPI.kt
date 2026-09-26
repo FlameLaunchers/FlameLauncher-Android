@@ -45,7 +45,7 @@ class NeoForgeMetaAPI {
      *  - 네 조각 `26.3.0.22-beta` → `26.3`  (26 부터 MC 버전이 1.x 가 아니다)
      * 네 조각을 안 다루면 26.x 에서 목록이 통째로 비어 "네오포지 없음" 으로 보인다.
      */
-    private fun neoforgeVersionToMc(v: String): String? {
+    internal fun neoforgeVersionToMc(v: String): String? {
         val base = v.substringBefore("-") // "21.1.43-beta" 같은 접미사 제거
         val parts = base.split(".")
         if (parts.size >= 4) {

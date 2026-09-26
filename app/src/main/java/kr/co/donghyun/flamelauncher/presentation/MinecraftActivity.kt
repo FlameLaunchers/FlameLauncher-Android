@@ -2170,6 +2170,12 @@ class MinecraftActivity : org.libsdl.app.SDLActivity() {
                             Log.d("FLAME_LAUNCHER", "🚫 NeoForge 게임 jar classpath 제외 (좌표로 자동 로드, ZL2 방식): ${f.name}")
                             return@forEach
                         }
+                        // 26.x 는 프로세서가 minecraft-client-patched-<ver>.jar 를 만든다. 이것도
+                        // classpath 에 올리면 위와 같은 이유로 개발 환경 판정에 걸린다.
+                        if (ap.contains("/net/neoforged/minecraft-client-patched/")) {
+                            Log.d("FLAME_LAUNCHER", "🚫 NeoForge 패치 게임 jar classpath 제외: ${f.name}")
+                            return@forEach
+                        }
                     }
 
                     // Forge: net/minecraft/client/<ver>/ 아래의 "중간 산출물"을 classpath 에서 제외.
@@ -2296,9 +2302,16 @@ class MinecraftActivity : org.libsdl.app.SDLActivity() {
             //   → modern Forge 는 바닐라 jar 를 넣지 않는다. 게임 클래스는 forge-<ver>-client.jar
             //     (binarypatcher 산출물, official 매핑 + Forge 코드 포함)가 제공한다.
             //   (NeoForge 는 게임 jar 를 좌표로 로드하므로 기존 동작 유지)
-            val skipVanillaForForge = isModernLoader && !isNeoForge
+            // ⚠️ NeoForge(26.x)도 바닐라 jar 를 넣으면 안 된다. FancyModLoader 12 의 GameLocator 는
+            //    RequiredSystemFiles.find(...) 가 **비어 있어야** production 으로 간다(iOS 쪽에서
+            //    loader-12.0.0.jar 를 뜯어 확인). Minecraft.class·DetectedVersion·.mcassetsroot 중
+            //    하나라도 classpath 에 보이면 개발 환경으로 새고 이렇게 죽는다:
+            //      The patched Minecraft jar is missing. / dev environment Minecraft jar does not
+            //      have a Minecraft-Dists attribute
+            //    게임 jar 은 FML 이 libraryDirectory 에서 좌표로 찾아 자기 레이어에 올린다.
+            val skipVanillaForForge = isModernLoader
             if (skipVanillaForForge) {
-                Log.d("FLAME_LAUNCHER", "🚫 modern Forge: 바닐라 client jar 제외 (forge-client.jar 가 net.minecraft 소유): ${it.name}")
+                Log.d("FLAME_LAUNCHER", "🚫 ${if (isNeoForge) "NeoForge: 바닐라 client jar 제외 (좌표로 로드)" else "modern Forge: 바닐라 client jar 제외 (forge-client.jar 가 net.minecraft 소유)"}: ${it.name}")
             } else if (!jarList.contains(it.absolutePath)) {
                 jarList.add(it.absolutePath)
                 Log.d("FLAME_LAUNCHER", "✅ 바닐라 client jar classpath 포함 (ZL2 방식): ${it.absolutePath}")
