@@ -22,13 +22,18 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 /**
- * 저장소 README 를 그대로 띄우는 업데이트 노트 창. iOS 판과 같은 내용을 본다.
+ * 릴리스 목록을 띄우는 업데이트 노트 창 — 깃허브 릴리스 탭과 같은 내용이다.
  *
- * ⚠️ 마크다운을 직접 렌더링하지 않는다. GitHub 이 `Accept: application/vnd.github.html`
- *    로 요청하면 **렌더링된 HTML** 을 주므로, 표·체크박스·코드블록까지 GitHub 과 같은
- *    모양으로 나온다. 앱에서 마크다운 파서를 들고 다닐 이유가 없다.
+ * ⚠️ 예전에는 저장소 README 를 띄웠는데, 그 저장소(FlameLaunchers/FlameLauncher)가 비공개로
+ *    바뀌면서 익명 요청이 404 를 받아 창이 비었다. 애초에 "업데이트 노트" 에 어울리는 건
+ *    README 가 아니라 릴리스 노트다.
+ *
+ * ⚠️ 마크다운은 직접 렌더링하지 않는다. GitHub 의 마크다운 API 에 본문을 넘기면 렌더링된
+ *    HTML 을 주므로 표·코드블록까지 같은 모양으로 나온다. 앱에 파서를 들고 다닐 이유가 없다.
  */
-private const val README_API = "https://api.github.com/repos/FlameLaunchers/FlameLauncher/readme"
+private const val RELEASES_API =
+    "https://api.github.com/repos/FlameLaunchers/FlameLauncher-Android/releases?per_page=10"
+private const val MARKDOWN_API = "https://api.github.com/markdown/raw"
 
 /** 앱이 살아있는 동안 한 번만 받는다. 화면을 오갈 때마다 다시 받을 이유가 없다. */
 private var cachedHtml: String? = null
@@ -99,16 +104,50 @@ fun ReleaseNotesPane(modifier: Modifier = Modifier) {
     }
 }
 
+/** 릴리스 10개를 받아 "버전 · 날짜 · 본문" 을 이어붙인 마크다운을 HTML 로 만든다. */
 private fun fetchReadmeHtml(): String? = try {
-    (URL(README_API).openConnection() as HttpURLConnection).run {
-        // ⚠️ 이 헤더가 핵심이다. 없으면 JSON 메타데이터(base64 본문)가 오고,
-        //    있으면 GitHub 이 렌더링한 HTML 을 그대로 준다.
-        setRequestProperty("Accept", "application/vnd.github.html")
-        setRequestProperty("User-Agent", "FlameLauncher")
-        connectTimeout = 10_000
-        readTimeout = 10_000
-        if (responseCode == 200) inputStream.bufferedReader().use { it.readText() } else null
+    val json = httpGet(RELEASES_API, "application/vnd.github+json")
+    val releases = com.google.gson.JsonParser.parseString(json).asJsonArray
+    val markdown = buildString {
+        for (el in releases) {
+            val o = el.asJsonObject
+            if (o["draft"]?.asBoolean == true) continue
+            val tag = o["tag_name"]?.asString ?: continue
+            val name = o["name"]?.asString?.takeIf { it.isNotBlank() } ?: tag
+            val date = o["published_at"]?.asString?.take(10) ?: ""
+            val pre = if (o["prerelease"]?.asBoolean == true) " · pre-release" else ""
+            append("## ").append(name).append('\n')
+            append('`').append(tag).append("` · ").append(date).append(pre).append("\n\n")
+            append(o["body"]?.asString?.trim().orEmpty()).append("\n\n---\n\n")
+        }
     }
+    if (markdown.isBlank()) null else renderMarkdown(markdown)
 } catch (_: Exception) {
     null
 }
+
+/** GitHub 의 마크다운 렌더러. 실패하면 원문을 <pre> 로라도 보여준다. */
+private fun renderMarkdown(markdown: String): String = try {
+    (URL(MARKDOWN_API).openConnection() as HttpURLConnection).run {
+        requestMethod = "POST"
+        doOutput = true
+        setRequestProperty("Content-Type", "text/x-markdown")
+        setRequestProperty("User-Agent", "FlameLauncher")
+        connectTimeout = 10_000
+        readTimeout = 10_000
+        outputStream.use { it.write(markdown.toByteArray(Charsets.UTF_8)) }
+        if (responseCode == 200) inputStream.bufferedReader().use { it.readText() }
+        else "<pre>" + markdown.replace("<", "&lt;") + "</pre>"
+    }
+} catch (_: Exception) {
+    "<pre>" + markdown.replace("<", "&lt;") + "</pre>"
+}
+
+private fun httpGet(url: String, accept: String): String =
+    (URL(url).openConnection() as HttpURLConnection).run {
+        setRequestProperty("Accept", accept)
+        setRequestProperty("User-Agent", "FlameLauncher")
+        connectTimeout = 10_000
+        readTimeout = 10_000
+        inputStream.bufferedReader().use { it.readText() }
+    }

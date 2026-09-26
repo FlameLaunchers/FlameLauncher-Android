@@ -388,7 +388,7 @@
     <string name="section_keyboard_title">Edit controls</string>
     <string name="section_keyboard_subtitle">Arrange on-screen buttons</string>
     <string name="section_notes_title">Release notes</string>
-    <string name="section_notes_subtitle">Repository README</string>
+    <string name="section_notes_subtitle">Latest releases</string>
     <string name="section_modpacks_subtitle">CurseForge · Modrinth</string>
     <string name="section_graphics">Graphics</string>
     <string name="renderer_uses_global">Using the global default · tap to set one for this instance</string>

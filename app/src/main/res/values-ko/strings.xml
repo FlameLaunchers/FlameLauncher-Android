@@ -388,7 +388,7 @@
     <string name="section_keyboard_title">키보드 편집</string>
     <string name="section_keyboard_subtitle">화면 버튼 배치</string>
     <string name="section_notes_title">업데이트 노트</string>
-    <string name="section_notes_subtitle">저장소 README</string>
+    <string name="section_notes_subtitle">릴리스 목록</string>
     <string name="section_modpacks_subtitle">CurseForge · Modrinth</string>
     <string name="section_graphics">그래픽</string>
     <string name="renderer_uses_global">전역 기본값 사용 · 탭하여 이 인스턴스 전용으로 변경</string>
