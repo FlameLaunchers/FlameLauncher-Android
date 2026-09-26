@@ -2045,6 +2045,42 @@ class MinecraftActivity : org.libsdl.app.SDLActivity() {
         return n.startsWith("lwjgl-", ignoreCase = true) || n == "lwjgl.jar"
     }
 
+    /**
+     * 레거시(1.12.x 이하) 인스턴스의 게임 콘텐츠를 `.minecraft` 로 옮긴다.
+     *
+     * 게임 폴더가 레거시만 `<인스턴스>/.minecraft` 인데, 모드팩·콘텐츠 설치기는 최신 버전
+     * 기준으로 **인스턴스 루트**에 넣는다. 그대로 두면 FML 이 `.minecraft/mods` 를 뒤져서
+     * 기본 4개(minecraft·mcp·FML·forge)만 로드한다 — 실측: Compact Claustrophobia 의
+     * 모드 143개가 통째로 무시됐다(설치는 정상, 위치만 어긋남).
+     *
+     * 설치기마다 고치는 대신 **실행 직전 한 곳**에서 맞춘다. 이미 잘못 깔린 인스턴스도
+     * 다음 실행에 저절로 고쳐진다. 대상에 같은 이름이 있으면 건드리지 않는다.
+     */
+    private fun migrateLegacyContent(instanceBase: File, legacyRoot: File) {
+        val content = listOf(
+            "mods", "config", "resourcepacks", "shaderpacks", "scripts",
+            "resources", "defaultconfigs", "kubejs", "saves",
+        )
+        for (name in content) {
+            val from = File(instanceBase, name)
+            val entries = from.takeIf { it.isDirectory }?.listFiles() ?: continue
+            if (entries.isEmpty()) continue
+            val to = File(legacyRoot, name)
+            to.mkdirs()
+            val moved = entries.count { entry ->
+                val dest = File(to, entry.name)
+                !dest.exists() && entry.renameTo(dest)
+            }
+            if (moved > 0) {
+                Log.d("FLAME_LAUNCHER", "🚚 레거시 콘텐츠 이동: $name ${moved}개 → ${to.absolutePath}")
+            }
+        }
+        val options = File(instanceBase, "options.txt")
+        if (options.isFile && !File(legacyRoot, "options.txt").exists()) {
+            options.renameTo(File(legacyRoot, "options.txt"))
+        }
+    }
+
     private fun startMinecraft() {
         val base = applicationContext.filesDir
         val nativesDir = File(base, "natives")
@@ -2064,6 +2100,7 @@ class MinecraftActivity : org.libsdl.app.SDLActivity() {
             legacyRoot.mkdirs()
             File(legacyRoot, "logs").mkdirs()
             File(legacyRoot, "mods").mkdirs()
+            migrateLegacyContent(instanceBase, legacyRoot)
             legacyRoot
         } else {
             instanceBase.also {
