@@ -1578,6 +1578,28 @@ class MinecraftActivity : org.libsdl.app.SDLActivity() {
                 }
             }
 
+            // 1.7순위(NeoForge 26.x): outputs 도 없고 도구도 binarypatcher 가 아니다.
+            //   26.3 의 프로세서는 installertools 하나이고, 만들 파일은 args 의 --output 에만 있다:
+            //     --task PROCESS_MINECRAFT_JAR … --output …/minecraft-client-patched-<ver>.jar
+            //   도구 이름을 가리지 말고 **모든** 프로세서의 --output 을 보고 게임 jar 만 고른다.
+            //   (이 분기가 없으면 빌더가 코드 0 으로 성공해 jar 을 만들어 놨는데도
+            //    jarExists=false 가 되어 "빌더 실패 → 모든 JRE 로 실패" 로 끝난다. 실측 로그:
+            //      [ProcessorLauncher] ✅ 빌더 종료(코드 0) / 빌더 실패 (JRE 8, code=0, jarExists=false))
+            if (result.isEmpty()) {
+                for (i in 0 until count) {
+                    val pargs = (props.getProperty("processor.$i.args") ?: "").split('\u0001')
+                    val oi = pargs.indexOf("--output")
+                    if (oi < 0 || oi + 1 >= pargs.size) continue
+                    val out = pargs[oi + 1].trim()
+                    val norm = out.replace('\\', '/')
+                    if (out.endsWith(".jar")
+                        && (norm.contains("/net/neoforged/minecraft-client-patched/")
+                                || File(out).name.startsWith("minecraft-client-patched")
+                                || norm.endsWith("-client.jar"))
+                    ) result.add(File(out).absolutePath)
+                }
+            }
+
             // 2순위(보강): binarypatcher 식별 실패 시에만, forge/ 아래 -client.jar 출력을 잡는다.
             if (result.isEmpty()) {
                 for (i in 0 until count) {
