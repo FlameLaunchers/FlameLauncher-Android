@@ -210,7 +210,16 @@ data class JvmSettings(
             //    "module java.base does not open java.lang.reflect" 로 죽는다.
             // ✅ 대신 agent 를 쓴다. premain 은 모듈/open 안정화 이후 실행되고,
             //    sun.misc.Unsafe 로 Toolkit 필드를 직접 덮어쓰므로 privateLookupIn 이 필요 없다.
-            args += "-javaagent:$cacioAgentJar"
+            //
+            // ⚠️ **JDK 24 부터는 그 agent 를 쓰면 안 된다.** premain 이 쓰는
+            //    sun.misc.Unsafe 의 staticFieldBase / staticFieldOffset / putObject 가
+            //    JEP 471·498 로 거부(24~25)되고 26 에서 제거됐다. agent 의 premain 이 던지면
+            //    JVM 은 그 자리에서 죽는다 — 화면에는 cacio 오류만 남는다.
+            //    iOS 는 **처음부터 agent 없이** -Dawt.toolkit 만으로 같은 cacio 를 쓰고
+            //    같은 자바 25 에서 잘 돈다. 24+ 에서는 그 구성을 그대로 따른다.
+            if (javaMajor < 24) {
+                args += "-javaagent:$cacioAgentJar"
+            }
             args += "-Xbootclasspath/a:$cacio17Jars"
 
             // java.desktop / java.base 내부 패키지 개방 (JRE9+ 모듈 캡슐화 우회).
